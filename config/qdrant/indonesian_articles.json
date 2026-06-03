@@ -1,0 +1,13 @@
+{
+  "vectors": {
+    "size": 1024,
+    "distance": "Cosine",
+    "on_disk": false,
+    "datatype": "float32"
+  },
+  "hnsw_config": {
+    "m": 24,
+    "payload_m": 24,
+    "ef_construct": 256
+  }
+}

@@ -1,0 +1,23 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333" # REST API + Web UI dashboard at http://localhost:6333/dashboard
+      - "6334:6334" # gRPC (used by go-client)
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+
+  # Creates indonesian_articles if missing (Qdrant has no declarative collection config in compose).
+  qdrant-init:
+    image: curlimages/curl:latest
+    depends_on:
+      - qdrant
+    volumes:
+      - ./config/qdrant/indonesian_articles.json:/init/collection.json:ro
+      - ./scripts/qdrant-init-collection.sh:/init/bootstrap.sh:ro
+    environment:
+      COLLECTION: indonesian_articles
+      CONFIG_FILE: /init/collection.json
+    entrypoint: ["/bin/sh", "/init/bootstrap.sh"]
+    restart: "no"
