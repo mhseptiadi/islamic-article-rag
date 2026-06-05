@@ -17,9 +17,14 @@ func main() {
 		log.Fatalf("load config: %v", err)
 	}
 
-	embedder := service.NewEmbeddingClient(cfg.EmbeddingAPIKey)
-	llm := service.NewLLMClient(cfg.LLMAPIKey)
-	vectors := qdrant.NewVectorRepository(cfg.QdrantURL, "article_chunks")
+	embedder := service.NewEmbeddingClient(cfg.EmbeddingAPIKey, cfg.OllamaEmbeddingURL, cfg.OllamaEmbeddingModel)
+	llm := service.NewLLMClient(cfg.LLMAPIKey, cfg.OllamaLLMURL, cfg.OllamaLLMModel)
+
+	vectors, err := qdrant.NewVectorRepository(cfg.QdrantHost, cfg.QdrantGRPCPort, cfg.QdrantCollection, cfg.MinSimilarityScore)
+	if err != nil {
+		log.Fatalf("connect to qdrant: %v", err)
+	}
+	defer vectors.Close()
 
 	orchestrator := service.NewQnAOrchestrator(embedder, llm, vectors)
 	qnaHandler := handler.NewQnAHandler(orchestrator)

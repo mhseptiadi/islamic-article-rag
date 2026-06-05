@@ -2,31 +2,153 @@ package qdrant
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 
 	"github.com/mhseptiadi/islamic-article-rag/internal/model"
+	"github.com/qdrant/go-client/qdrant"
 )
 
 type VectorRepository struct {
-	baseURL        string
-	collectionName string
+	client             *qdrant.Client
+	collectionName     string
+	minSimilarityScore float32
 }
 
-func NewVectorRepository(baseURL, collectionName string) *VectorRepository {
-	return &VectorRepository{
-		baseURL:        baseURL,
-		collectionName: collectionName,
+func NewVectorRepository(host string, grpcPort int, collectionName string, minSimilarityScore float64) (*VectorRepository, error) {
+	client, err := qdrant.NewClient(&qdrant.Config{
+		Host: host,
+		Port: grpcPort,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("connect to qdrant: %w", err)
 	}
+
+	return &VectorRepository{
+		client:             client,
+		collectionName:     collectionName,
+		minSimilarityScore: float32(minSimilarityScore),
+	}, nil
+}
+
+func (r *VectorRepository) Close() error {
+	return r.client.Close()
 }
 
 func (r *VectorRepository) InsertChunks(ctx context.Context, chunks []model.Chunk) error {
-	_ = ctx
-	_ = chunks
+	if len(chunks) == 0 {
+		return nil
+	}
+
+	points := make([]*qdrant.PointStruct, len(chunks))
+	for i, chunk := range chunks {
+		payload := qdrant.NewValueMap(map[string]any{
+			"chunk_text": chunk.Payload.Text,
+			"source_url": chunk.Payload.Metadata.SourceURL,
+			// "koran_refs": chunk.Payload.Metadata.QuranRefs,
+		})
+
+		points[i] = &qdrant.PointStruct{
+			Id:      qdrant.NewIDUUID(chunk.ID),
+			Vectors: qdrant.NewVectors(chunk.Vector...),
+			Payload: payload,
+		}
+	}
+
+	_, err := r.client.Upsert(ctx, &qdrant.UpsertPoints{
+		CollectionName: r.collectionName,
+		Points:         points,
+	})
+	if err != nil {
+		return fmt.Errorf("upsert points: %w", err)
+	}
+
 	return nil
 }
 
 func (r *VectorRepository) SearchSimilar(ctx context.Context, vector []float32, limit int) ([]model.Chunk, error) {
-	_ = ctx
-	_ = vector
-	_ = limit
-	return nil, nil
+	if len(vector) == 0 {
+		return nil, fmt.Errorf("search vector is empty")
+	}
+
+	if limit <= 0 {
+		limit = 5
+	}
+	queryLimit := uint64(limit)
+	scoreThreshold := r.minSimilarityScore
+
+	results, err := r.client.Query(ctx, &qdrant.QueryPoints{
+		CollectionName: r.collectionName,
+		Query:          qdrant.NewQueryDense(vector),
+		Limit:          &queryLimit,
+		ScoreThreshold: &scoreThreshold,
+		WithPayload:    qdrant.NewWithPayload(true),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("query similar points: %w", err)
+	}
+
+	chunks := make([]model.Chunk, 0, len(results))
+	for _, point := range results {
+		if point.GetScore() < r.minSimilarityScore {
+			continue
+		}
+		chunks = append(chunks, scoredPointToChunk(point))
+	}
+
+	return chunks, nil
+}
+
+func scoredPointToChunk(point *qdrant.ScoredPoint) model.Chunk {
+	payload := point.GetPayload()
+
+	return model.Chunk{
+		ID:    pointIDString(point.GetId()),
+		Score: float64(point.GetScore()),
+		Payload: model.Payload{
+			Text: payloadString(payload, "chunk_text"),
+			Metadata: model.Metadata{
+				SourceURL: payloadString(payload, "source_url"),
+				QuranRefs: payloadStringList(payload, "koran_refs"),
+			},
+		},
+	}
+}
+
+func pointIDString(id *qdrant.PointId) string {
+	if id == nil {
+		return ""
+	}
+	if uuid := id.GetUuid(); uuid != "" {
+		return uuid
+	}
+	return strconv.FormatUint(id.GetNum(), 10)
+}
+
+func payloadString(payload map[string]*qdrant.Value, key string) string {
+	val, ok := payload[key]
+	if !ok || val == nil {
+		return ""
+	}
+	return val.GetStringValue()
+}
+
+func payloadStringList(payload map[string]*qdrant.Value, key string) []string {
+	val, ok := payload[key]
+	if !ok || val == nil {
+		return nil
+	}
+
+	list := val.GetListValue()
+	if list == nil {
+		return nil
+	}
+
+	out := make([]string, 0, len(list.GetValues()))
+	for _, item := range list.GetValues() {
+		if s := item.GetStringValue(); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }

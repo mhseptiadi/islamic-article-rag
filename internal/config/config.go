@@ -6,19 +6,22 @@ import (
 )
 
 type Config struct {
-	HTTPPort        string
-	QdrantURL       string
-	QdrantHost      string
-	QdrantGRPCPort  int
+	HTTPPort         string
+	QdrantURL        string
+	QdrantHost       string
+	QdrantGRPCPort   int
 	QdrantCollection string
-	EmbeddingAPIKey string
-	LLMAPIKey       string
+	EmbeddingAPIKey  string
+	LLMAPIKey        string
 
 	RawArticlesDir       string
 	ChunkWindowSize      int
 	ChunkStepSize        int
 	OllamaEmbeddingURL   string
 	OllamaEmbeddingModel string
+	OllamaLLMURL         string
+	OllamaLLMModel       string
+	MinSimilarityScore   float64
 }
 
 func Load() (*Config, error) {
@@ -35,6 +38,9 @@ func Load() (*Config, error) {
 		ChunkStepSize:        getEnvInt("CHUNK_STEP_SIZE", 2),
 		OllamaEmbeddingURL:   getEnv("OLLAMA_EMBEDDING_URL", "http://localhost:11434/api/embeddings"),
 		OllamaEmbeddingModel: getEnv("OLLAMA_EMBEDDING_MODEL", "bge-m3"),
+		OllamaLLMURL:         getEnv("OLLAMA_LLM_URL", "http://localhost:11434/api/generate"),
+		OllamaLLMModel:       getEnv("OLLAMA_LLM_MODEL", "qwen2.5:7b"),
+		MinSimilarityScore:   getEnvFloat("MIN_SIMILARITY_SCORE", 0.50),
 	}, nil
 }
 
@@ -51,6 +57,18 @@ func getEnvInt(key string, fallback int) int {
 		return fallback
 	}
 	n, err := strconv.Atoi(v)
+	if err != nil {
+		return fallback
+	}
+	return n
+}
+
+func getEnvFloat(key string, fallback float64) float64 {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	n, err := strconv.ParseFloat(v, 64)
 	if err != nil {
 		return fallback
 	}

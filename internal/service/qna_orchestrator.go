@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/mhseptiadi/islamic-article-rag/internal/model"
 	"github.com/mhseptiadi/islamic-article-rag/internal/repository/qdrant"
@@ -34,6 +35,10 @@ func (o *QnAOrchestrator) Ask(ctx context.Context, question string) (*AskResult,
 	embeddings, err := o.embedder.Embed(ctx, []string{question})
 	if err != nil {
 		return nil, err
+	}
+
+	if len(embeddings) == 0 {
+		return nil, fmt.Errorf("no embeddings generated for question")
 	}
 
 	chunks, err := o.vectors.SearchSimilar(ctx, embeddings[0], 5)

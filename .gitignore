@@ -1,3 +1,4 @@
 data/**/*.md
 qdrant_storage/
 .env
+tmp/
