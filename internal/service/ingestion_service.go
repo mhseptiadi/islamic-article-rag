@@ -18,12 +18,18 @@ import (
 type IngestionService struct {
 	embedder *EmbeddingClient
 	vectors  *qdrant.VectorRepository
+	articles *qdrant.ArticleRepository
 }
 
-func NewIngestionService(embedder *EmbeddingClient, vectors *qdrant.VectorRepository) *IngestionService {
+func NewIngestionService(
+	embedder *EmbeddingClient,
+	vectors *qdrant.VectorRepository,
+	articles *qdrant.ArticleRepository,
+) *IngestionService {
 	return &IngestionService{
 		embedder: embedder,
 		vectors:  vectors,
+		articles: articles,
 	}
 }
 
@@ -52,7 +58,16 @@ func (s *IngestionService) IngestDirectory(ctx context.Context, rawDir string, w
 			sourceURL = fmt.Sprintf("file://%s", entry.Name())
 		}
 
-		chunks, err := s.chunkFile(ctx, content, sourceURL, windowSize, stepSize)
+		articleID := uuid.New().String()
+		if err := s.articles.InsertArticle(ctx, model.Article{
+			ID:   articleID,
+			Text: content,
+			URL:  sourceURL,
+		}); err != nil {
+			return 0, fmt.Errorf("insert article %s: %w", entry.Name(), err)
+		}
+
+		chunks, err := s.chunkFile(ctx, content, sourceURL, articleID, windowSize, stepSize)
 		if err != nil {
 			return 0, fmt.Errorf("process file %s: %w", entry.Name(), err)
 		}
@@ -72,7 +87,20 @@ func (s *IngestionService) IngestDirectory(ctx context.Context, rawDir string, w
 	return len(allChunks), nil
 }
 
-func (s *IngestionService) IngestArticle(ctx context.Context, articleID, title, body string) error {
+func (s *IngestionService) IngestArticle(ctx context.Context, articleID, title, body, sourceURL string) error {
+	fullText := body
+	if title != "" {
+		fullText = title + "\n\n" + body
+	}
+
+	if err := s.articles.InsertArticle(ctx, model.Article{
+		ID:   articleID,
+		Text: fullText,
+		URL:  sourceURL,
+	}); err != nil {
+		return err
+	}
+
 	paragraphs := splitParagraphs(body)
 	chunks := make([]model.Chunk, 0, len(paragraphs))
 
@@ -96,6 +124,7 @@ func (s *IngestionService) IngestArticle(ctx context.Context, articleID, title, 
 				Metadata: model.Metadata{
 					ArticleID:    articleID,
 					Title:        title,
+					SourceURL:    sourceURL,
 					QuranRefs:    refStrings,
 					ParagraphIdx: i,
 				},
@@ -106,7 +135,7 @@ func (s *IngestionService) IngestArticle(ctx context.Context, articleID, title, 
 	return s.vectors.InsertChunks(ctx, chunks)
 }
 
-func (s *IngestionService) chunkFile(ctx context.Context, content, sourceURL string, windowSize, stepSize int) ([]model.Chunk, error) {
+func (s *IngestionService) chunkFile(ctx context.Context, content, sourceURL, articleID string, windowSize, stepSize int) ([]model.Chunk, error) {
 	paragraphs := strings.Split(content, "\n")
 	var chunks []model.Chunk
 
@@ -136,6 +165,7 @@ func (s *IngestionService) chunkFile(ctx context.Context, content, sourceURL str
 			Payload: model.Payload{
 				Text: chunkText,
 				Metadata: model.Metadata{
+					ArticleID: articleID,
 					SourceURL: sourceURL,
 					QuranRefs: refStrings,
 				},

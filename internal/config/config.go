@@ -10,7 +10,8 @@ type Config struct {
 	QdrantURL        string
 	QdrantHost       string
 	QdrantGRPCPort   int
-	QdrantCollection string
+	QdrantCollection        string
+	QdrantArticleCollection string
 	EmbeddingAPIKey  string
 	LLMAPIKey        string
 
@@ -30,7 +31,8 @@ func Load() (*Config, error) {
 		QdrantURL:            getEnv("QDRANT_URL", "http://localhost:6333"),
 		QdrantHost:           getEnv("QDRANT_HOST", "localhost"),
 		QdrantGRPCPort:       getEnvInt("QDRANT_GRPC_PORT", 6334),
-		QdrantCollection:     getEnv("QDRANT_COLLECTION", "indonesian_articles"),
+		QdrantCollection:        getEnv("QDRANT_COLLECTION", "indonesian_articles"),
+		QdrantArticleCollection: getEnv("QDRANT_ARTICLE_COLLECTION", "indonesian_articles_full"),
 		EmbeddingAPIKey:      os.Getenv("EMBEDDING_API_KEY"),
 		LLMAPIKey:            os.Getenv("LLM_API_KEY"),
 		RawArticlesDir:       getEnv("RAW_ARTICLES_DIR", "data/raw_articles"),

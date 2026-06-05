@@ -43,13 +43,15 @@ func (r *VectorRepository) InsertChunks(ctx context.Context, chunks []model.Chun
 	points := make([]*qdrant.PointStruct, len(chunks))
 	for i, chunk := range chunks {
 		payload := qdrant.NewValueMap(map[string]any{
-			"chunk_text": chunk.Payload.Text,
-			"source_url": chunk.Payload.Metadata.SourceURL,
-			// "koran_refs": chunk.Payload.Metadata.QuranRefs,
+			"chunk_text":  chunk.Payload.Text,
+			"article_id":  chunk.Payload.Metadata.ArticleID,
+			"source_url":  chunk.Payload.Metadata.SourceURL,
+			"title":       chunk.Payload.Metadata.Title,
+			"paragraph_idx": chunk.Payload.Metadata.ParagraphIdx,
 		})
 
 		points[i] = &qdrant.PointStruct{
-			Id:      qdrant.NewIDUUID(chunk.ID),
+			Id:      pointIDFromString(chunk.ID),
 			Vectors: qdrant.NewVectors(chunk.Vector...),
 			Payload: payload,
 		}
@@ -108,8 +110,11 @@ func scoredPointToChunk(point *qdrant.ScoredPoint) model.Chunk {
 		Payload: model.Payload{
 			Text: payloadString(payload, "chunk_text"),
 			Metadata: model.Metadata{
-				SourceURL: payloadString(payload, "source_url"),
-				QuranRefs: payloadStringList(payload, "koran_refs"),
+				ArticleID:    payloadString(payload, "article_id"),
+				Title:        payloadString(payload, "title"),
+				SourceURL:    payloadString(payload, "source_url"),
+				ParagraphIdx: payloadInt(payload, "paragraph_idx"),
+				QuranRefs:    payloadStringList(payload, "koran_refs"),
 			},
 		},
 	}
@@ -131,6 +136,20 @@ func payloadString(payload map[string]*qdrant.Value, key string) string {
 		return ""
 	}
 	return val.GetStringValue()
+}
+
+func payloadInt(payload map[string]*qdrant.Value, key string) int {
+	val, ok := payload[key]
+	if !ok || val == nil {
+		return 0
+	}
+	if i := val.GetIntegerValue(); i != 0 {
+		return int(i)
+	}
+	if d := val.GetDoubleValue(); d != 0 {
+		return int(d)
+	}
+	return 0
 }
 
 func payloadStringList(payload map[string]*qdrant.Value, key string) []string {

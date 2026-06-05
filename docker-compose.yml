@@ -21,3 +21,16 @@ services:
       CONFIG_FILE: /init/collection.json
     entrypoint: ["/bin/sh", "/init/bootstrap.sh"]
     restart: "no"
+
+  qdrant-init-articles:
+    image: curlimages/curl:latest
+    depends_on:
+      - qdrant
+    volumes:
+      - ./config/qdrant/indonesian_articles_full.json:/init/collection.json:ro
+      - ./scripts/qdrant-init-collection.sh:/init/bootstrap.sh:ro
+    environment:
+      COLLECTION: indonesian_articles_full
+      CONFIG_FILE: /init/collection.json
+    entrypoint: ["/bin/sh", "/init/bootstrap.sh"]
+    restart: "no"

@@ -1,5 +1,11 @@
 package model
 
+type Article struct {
+	ID   string `json:"id"`
+	Text string `json:"text"`
+	URL  string `json:"url"`
+}
+
 type Metadata struct {
 	ArticleID    string   `json:"article_id"`
 	Title        string   `json:"title"`

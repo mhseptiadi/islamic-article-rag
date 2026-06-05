@@ -24,7 +24,13 @@ func main() {
 	}
 	defer vectors.Close()
 
-	ingestion := service.NewIngestionService(embedder, vectors)
+	articles, err := qdrant.NewArticleRepository(cfg.QdrantHost, cfg.QdrantGRPCPort, cfg.QdrantArticleCollection)
+	if err != nil {
+		log.Fatalf("connect to qdrant articles: %v", err)
+	}
+	defer articles.Close()
+
+	ingestion := service.NewIngestionService(embedder, vectors, articles)
 
 	count, err := ingestion.IngestDirectory(
 		context.Background(),
