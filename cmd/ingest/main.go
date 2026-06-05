@@ -13,21 +13,20 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/mhseptiadi/islamic-article-rag/internal/config"
 	"github.com/qdrant/go-client/qdrant"
 )
 
-const (
-	windowSize = 3 // Number of paragraphs per chunk
-	stepSize   = 2 // Slide forward by 2 paragraphs (1 paragraph overlap)
-	collection = "indonesian_articles"
-	dataDir    = "data/raw_articles"
-)
-
 func main() {
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("load config: %v", err)
+	}
+
 	// 1. Connect to Qdrant (Local or Cloud)
 	client, err := qdrant.NewClient(&qdrant.Config{
-		Host: "localhost",
-		Port: 6334, // gRPC port
+		Host: cfg.QdrantHost,
+		Port: cfg.QdrantGRPCPort,
 	})
 	if err != nil {
 		log.Fatalf("Failed to connect to Qdrant: %v", err)
@@ -35,9 +34,9 @@ func main() {
 	defer client.Close()
 
 	// 2. Read all files in the directory
-	entries, err := os.ReadDir(dataDir)
+	entries, err := os.ReadDir(cfg.RawArticlesDir)
 	if err != nil {
-		log.Fatalf("Failed to read directory %s: %v", dataDir, err)
+		log.Fatalf("Failed to read directory %s: %v", cfg.RawArticlesDir, err)
 	}
 
 	var allPoints []*qdrant.PointStruct
@@ -48,7 +47,7 @@ func main() {
 			continue
 		}
 
-		fullPath := filepath.Join(dataDir, entry.Name())
+		fullPath := filepath.Join(cfg.RawArticlesDir, entry.Name())
 		contentBytes, err := os.ReadFile(fullPath)
 		if err != nil {
 			log.Printf("Failed to read file %s: %v", fullPath, err)
@@ -68,7 +67,7 @@ func main() {
 		paragraphs := strings.Split(content, "\n")
 
 		for i := 0; i < len(paragraphs); {
-			end := i + windowSize
+			end := i + cfg.ChunkWindowSize
 			if end > len(paragraphs) {
 				end = len(paragraphs)
 			}
@@ -88,7 +87,7 @@ func main() {
 			// fmt.Println("koranRefs: ", koranRefs)
 
 			// Call Embedding API (Cohere/OpenAI)
-			vector := generateEmbedding(chunkText)
+			vector := generateEmbedding(cfg, chunkText)
 			// fmt.Println("vector: ", vector)
 
 			// Build the Qdrant Payload (Metadata)
@@ -113,7 +112,7 @@ func main() {
 			if end == len(paragraphs) {
 				break
 			}
-			i += stepSize
+			i += cfg.ChunkStepSize
 		}
 
 		fmt.Printf("Processed file: %s\n", entry.Name())
@@ -122,7 +121,7 @@ func main() {
 	// 4. Batch Upsert all chunks into Vector Database
 	if len(allPoints) > 0 {
 		_, err = client.Upsert(context.Background(), &qdrant.UpsertPoints{
-			CollectionName: collection,
+			CollectionName: cfg.QdrantCollection,
 			Points:         allPoints,
 		})
 		if err != nil {
@@ -173,23 +172,15 @@ func removeArabicText(text string) string {
 	return re.ReplaceAllString(text, "")
 }
 
-// generateEmbedding simulates calling an Embedding API
-func generateEmbedding(text string) []float32 {
-	// TODO: Replace with actual HTTP client call to Cohere/OpenAI
-	// return []float32{0.12, 0.45, -0.32, 0.88}
-	// Ollama runs locally on port 11434
-
-	url := "http://localhost:11434/api/embeddings"
-
-	// Create the JSON payload
+// generateEmbedding calls the configured embedding API (Ollama by default).
+func generateEmbedding(cfg *config.Config, text string) []float32 {
 	payload := map[string]string{
-		"model":  "bge-m3",
+		"model":  cfg.OllamaEmbeddingModel,
 		"prompt": text,
 	}
 	jsonData, _ := json.Marshal(payload)
 
-	// Make the HTTP request
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	resp, err := http.Post(cfg.OllamaEmbeddingURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		log.Fatalf("Failed to call Ollama: %v", err)
 	}
