@@ -69,12 +69,12 @@ func buildRAGPrompt(question string, contextBlocks []string) string {
 	var b strings.Builder
 
 	b.WriteString("You are a helpful assistant answering questions about Islamic articles.\n")
-	b.WriteString("Use only the context below. If the context is insufficient, say you cannot answer from the available sources.\n\n")
+	b.WriteString("Use only the full articles below. If the articles are insufficient, say you cannot answer from the available sources.\n\n")
 
 	if len(contextBlocks) == 0 {
-		b.WriteString("Context:\n(no relevant passages found)\n\n")
+		b.WriteString("Articles:\n(no relevant articles found)\n\n")
 	} else {
-		b.WriteString("Context:\n")
+		b.WriteString("Articles:\n")
 		for i, block := range contextBlocks {
 			b.WriteString(fmt.Sprintf("[%d] %s\n\n", i+1, block))
 		}

@@ -59,6 +59,38 @@ func (r *ArticleRepository) InsertArticle(ctx context.Context, article model.Art
 	return nil
 }
 
+func (r *ArticleRepository) GetByURL(ctx context.Context, url string) (*model.Article, error) {
+	if url == "" {
+		return nil, nil
+	}
+
+	limit := uint32(1)
+	results, err := r.client.Scroll(ctx, &qdrant.ScrollPoints{
+		CollectionName: r.collectionName,
+		Filter: &qdrant.Filter{
+			Must: []*qdrant.Condition{
+				qdrant.NewMatchKeyword("url", url),
+			},
+		},
+		Limit:       &limit,
+		WithPayload: qdrant.NewWithPayload(true),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get article by url: %w", err)
+	}
+
+	if len(results) == 0 {
+		return nil, nil
+	}
+
+	payload := results[0].GetPayload()
+	return &model.Article{
+		ID:   pointIDString(results[0].GetId()),
+		Text: payloadString(payload, "text"),
+		URL:  payloadString(payload, "url"),
+	}, nil
+}
+
 func (r *ArticleRepository) GetByID(ctx context.Context, articleID string) (*model.Article, error) {
 	results, err := r.client.Get(ctx, &qdrant.GetPoints{
 		CollectionName: r.collectionName,

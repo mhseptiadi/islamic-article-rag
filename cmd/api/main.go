@@ -26,7 +26,13 @@ func main() {
 	}
 	defer vectors.Close()
 
-	orchestrator := service.NewQnAOrchestrator(embedder, llm, vectors)
+	articles, err := qdrant.NewArticleRepository(cfg.QdrantHost, cfg.QdrantGRPCPort, cfg.QdrantArticleCollection)
+	if err != nil {
+		log.Fatalf("connect to qdrant articles: %v", err)
+	}
+	defer articles.Close()
+
+	orchestrator := service.NewQnAOrchestrator(embedder, llm, vectors, articles)
 	qnaHandler := handler.NewQnAHandler(orchestrator)
 
 	mux := http.NewServeMux()
