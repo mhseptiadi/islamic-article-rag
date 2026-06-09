@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/google/uuid"
 	"github.com/mhseptiadi/islamic-article-rag/internal/model"
@@ -111,6 +112,11 @@ func (s *IngestionService) IngestArticle(ctx context.Context, articleID, title, 
 			refStrings[j] = ref.Raw
 		}
 
+		paragraph = removeArabicText(paragraph)
+		if !isEmbeddableChunk(paragraph) {
+			continue
+		}
+
 		embeddings, err := s.embedder.Embed(ctx, []string{paragraph})
 		if err != nil {
 			return err
@@ -146,7 +152,14 @@ func (s *IngestionService) chunkFile(ctx context.Context, content, sourceURL, ar
 		}
 
 		chunkText := strings.Join(paragraphs[i:end], "\n")
-		chunkText = removeArabicText(chunkText)
+		chunkText = strings.TrimSpace(removeArabicText(chunkText))
+		if !isEmbeddableChunk(chunkText) {
+			if end == len(paragraphs) {
+				break
+			}
+			i += stepSize
+			continue
+		}
 
 		refs := regexutil.ExtractQuranReferences(chunkText)
 		refStrings := make([]string, len(refs))
@@ -201,4 +214,13 @@ func extractSourceURL(text string) string {
 func removeArabicText(text string) string {
 	re := regexp.MustCompile(`[\x{0600}-\x{06FF}]+`)
 	return re.ReplaceAllString(text, "")
+}
+
+func isEmbeddableChunk(text string) bool {
+	for _, r := range text {
+		if unicode.IsLetter(r) {
+			return true
+		}
+	}
+	return false
 }
