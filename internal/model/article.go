@@ -19,9 +19,19 @@ type Payload struct {
 	Metadata Metadata `json:"metadata"`
 }
 
+type SparseVector struct {
+	Indices []uint32  `json:"indices"`
+	Values  []float32 `json:"values"`
+}
+
+func (v SparseVector) HasValues() bool {
+	return len(v.Indices) > 0 && len(v.Values) > 0
+}
+
 type Chunk struct {
-	ID      string    `json:"id"`
-	Vector  []float32 `json:"vector"`
-	Score   float64   `json:"score,omitempty"`
-	Payload Payload   `json:"payload"`
+	ID           string        `json:"id"`
+	Vector       []float32     `json:"vector"`
+	SparseVector *SparseVector `json:"sparse_vector,omitempty"`
+	Score        float64       `json:"score,omitempty"`
+	Payload      Payload       `json:"payload"`
 }

@@ -1,9 +1,16 @@
 {
   "vectors": {
-    "size": 1024,
-    "distance": "Cosine",
-    "on_disk": false,
-    "datatype": "float32"
+    "dense": {
+      "size": 1024,
+      "distance": "Cosine",
+      "on_disk": false,
+      "datatype": "float32"
+    }
+  },
+  "sparse_vectors": {
+    "sparse": {
+      "modifier": "idf"
+    }
   },
   "hnsw_config": {
     "m": 24,

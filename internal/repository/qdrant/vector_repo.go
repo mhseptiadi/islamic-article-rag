@@ -52,7 +52,7 @@ func (r *VectorRepository) InsertChunks(ctx context.Context, chunks []model.Chun
 
 		points[i] = &qdrant.PointStruct{
 			Id:      pointIDFromString(chunk.ID),
-			Vectors: qdrant.NewVectors(chunk.Vector...),
+			Vectors: newNamedVectors(chunk.Vector, chunk.SparseVector),
 			Payload: payload,
 		}
 	}
@@ -82,6 +82,7 @@ func (r *VectorRepository) SearchSimilar(ctx context.Context, vector []float32, 
 	results, err := r.client.Query(ctx, &qdrant.QueryPoints{
 		CollectionName: r.collectionName,
 		Query:          qdrant.NewQueryDense(vector),
+		Using:          qdrant.PtrOf(DenseVectorName),
 		Limit:          &queryLimit,
 		ScoreThreshold: &scoreThreshold,
 		WithPayload:    qdrant.NewWithPayload(true),

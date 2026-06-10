@@ -44,7 +44,7 @@ func (r *ArticleRepository) InsertArticle(ctx context.Context, article model.Art
 
 	point := &qdrant.PointStruct{
 		Id:      pointIDFromString(article.ID),
-		Vectors: qdrant.NewVectors(articlePlaceholderVector...),
+		Vectors: newDenseVectors(articlePlaceholderVector),
 		Payload: payload,
 	}
 
