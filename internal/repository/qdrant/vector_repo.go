@@ -52,7 +52,7 @@ func (r *VectorRepository) InsertChunks(ctx context.Context, chunks []model.Chun
 
 		points[i] = &qdrant.PointStruct{
 			Id:      pointIDFromString(chunk.ID),
-			Vectors: newNamedVectors(chunk.DenseVector, chunk.SparseVector),
+			Vectors: newNamedVectors(chunk.DenseVector, chunk.Payload.Text),
 			Payload: payload,
 		}
 	}

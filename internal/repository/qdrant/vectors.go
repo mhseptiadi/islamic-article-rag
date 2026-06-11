@@ -8,10 +8,11 @@ import (
 const (
 	DenseVectorName  = "dense"
 	SparseVectorName = "sparse"
+	BM25Model        = "qdrant/bm25"
 )
 
 func newDenseVectors(vector []float32) *qdrant.Vectors {
-	return newNamedVectors(vector, nil)
+	return newNamedVectors(vector, "")
 }
 
 func newSparseVectors(sparse model.SparseVector) *qdrant.Vectors {
@@ -20,15 +21,18 @@ func newSparseVectors(sparse model.SparseVector) *qdrant.Vectors {
 	})
 }
 
-// newNamedVectors builds a point with dense and optional sparse vectors.
-// Sparse values should be term frequencies only; Qdrant applies collection-level
-// IDF (BM25) when the sparse vector is configured with modifier "idf".
-func newNamedVectors(dense []float32, sparse *model.SparseVector) *qdrant.Vectors {
+// newNamedVectors builds a point with dense and BM25 sparse vectors.
+// Sparse is generated server-side from sparseText; Qdrant applies collection-level
+// IDF when the sparse vector is configured with modifier "idf".
+func newNamedVectors(dense []float32, sparseText string) *qdrant.Vectors {
 	vectors := map[string]*qdrant.Vector{
 		DenseVectorName: qdrant.NewVectorDense(dense),
 	}
-	if sparse != nil && sparse.HasValues() {
-		vectors[SparseVectorName] = qdrant.NewVectorSparse(sparse.Indices, sparse.Values)
+	if sparseText != "" {
+		vectors[SparseVectorName] = qdrant.NewVectorDocument(&qdrant.Document{
+			Model: BM25Model,
+			Text:  sparseText,
+		})
 	}
 	return qdrant.NewVectorsMap(vectors)
 }
