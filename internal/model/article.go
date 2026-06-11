@@ -30,7 +30,7 @@ func (v SparseVector) HasValues() bool {
 
 type Chunk struct {
 	ID           string        `json:"id"`
-	Vector       []float32     `json:"vector"`
+	DenseVector  []float32     `json:"dense_vector"`
 	SparseVector *SparseVector `json:"sparse_vector,omitempty"`
 	Score        float64       `json:"score,omitempty"`
 	Payload      Payload       `json:"payload"`

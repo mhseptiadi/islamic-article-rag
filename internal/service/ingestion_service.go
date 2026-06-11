@@ -123,8 +123,9 @@ func (s *IngestionService) IngestArticle(ctx context.Context, articleID, title, 
 		}
 
 		chunks = append(chunks, model.Chunk{
-			ID:     articleID + "-" + strconv.Itoa(i),
-			Vector: embeddings[0],
+			ID:           articleID + "-" + strconv.Itoa(i),
+			DenseVector:  embeddings[0],
+			SparseVector: mockSparseVector(),
 			Payload: model.Payload{
 				Text: paragraph,
 				Metadata: model.Metadata{
@@ -173,8 +174,9 @@ func (s *IngestionService) chunkFile(ctx context.Context, content, sourceURL, ar
 		}
 
 		chunks = append(chunks, model.Chunk{
-			ID:     uuid.New().String(),
-			Vector: embeddings[0],
+			ID:           uuid.New().String(),
+			DenseVector:  embeddings[0],
+			SparseVector: mockSparseVector(),
 			Payload: model.Payload{
 				Text: chunkText,
 				Metadata: model.Metadata{
@@ -214,6 +216,13 @@ func extractSourceURL(text string) string {
 func removeArabicText(text string) string {
 	re := regexp.MustCompile(`[\x{0600}-\x{06FF}]+`)
 	return re.ReplaceAllString(text, "")
+}
+
+func mockSparseVector() *model.SparseVector {
+	return &model.SparseVector{
+		Indices: []uint32{1, 2, 3},
+		Values:  []float32{0.1, 0.2, 0.3},
+	}
 }
 
 func isEmbeddableChunk(text string) bool {
