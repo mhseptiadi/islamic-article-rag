@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/mhseptiadi/islamic-article-rag/internal/model"
 	"github.com/qdrant/go-client/qdrant"
@@ -43,10 +44,10 @@ func (r *VectorRepository) InsertChunks(ctx context.Context, chunks []model.Chun
 	points := make([]*qdrant.PointStruct, len(chunks))
 	for i, chunk := range chunks {
 		payload := qdrant.NewValueMap(map[string]any{
-			"chunk_text":  chunk.Payload.Text,
-			"article_id":  chunk.Payload.Metadata.ArticleID,
-			"source_url":  chunk.Payload.Metadata.SourceURL,
-			"title":       chunk.Payload.Metadata.Title,
+			"chunk_text":    chunk.Payload.Text,
+			"article_id":    chunk.Payload.Metadata.ArticleID,
+			"source_url":    chunk.Payload.Metadata.SourceURL,
+			"title":         chunk.Payload.Metadata.Title,
 			"paragraph_idx": chunk.Payload.Metadata.ParagraphIdx,
 		})
 
@@ -96,6 +97,59 @@ func (r *VectorRepository) SearchSimilar(ctx context.Context, vector []float32, 
 		if point.GetScore() < r.minSimilarityScore {
 			continue
 		}
+		chunks = append(chunks, scoredPointToChunk(point))
+	}
+
+	return chunks, nil
+}
+
+// HybridSearch combines dense semantic search with sparse BM25 keyword search
+// using Reciprocal Rank Fusion (RRF).
+func (r *VectorRepository) HybridSearch(ctx context.Context, denseVector []float32, queryText string, limit int) ([]model.Chunk, error) {
+	if len(denseVector) == 0 {
+		return nil, fmt.Errorf("dense query vector is empty")
+	}
+	if strings.TrimSpace(queryText) == "" {
+		return nil, fmt.Errorf("query text is empty")
+	}
+
+	if limit <= 0 {
+		limit = 5
+	}
+
+	queryLimit := uint64(limit)
+	prefetchLimit := queryLimit * 2
+	if prefetchLimit < 10 {
+		prefetchLimit = 10
+	}
+
+	results, err := r.client.Query(ctx, &qdrant.QueryPoints{
+		CollectionName: r.collectionName,
+		Prefetch: []*qdrant.PrefetchQuery{
+			{
+				Query: qdrant.NewQueryDense(denseVector),
+				Using: qdrant.PtrOf(DenseVectorName),
+				Limit: qdrant.PtrOf(prefetchLimit),
+			},
+			{
+				Query: qdrant.NewQueryDocument(&qdrant.Document{
+					Model: BM25Model,
+					Text:  queryText,
+				}),
+				Using: qdrant.PtrOf(SparseVectorName),
+				Limit: qdrant.PtrOf(prefetchLimit),
+			},
+		},
+		Query:       qdrant.NewQueryFusion(qdrant.Fusion_RRF),
+		Limit:       qdrant.PtrOf(queryLimit),
+		WithPayload: qdrant.NewWithPayload(true),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("hybrid search: %w", err)
+	}
+
+	chunks := make([]model.Chunk, 0, len(results))
+	for _, point := range results {
 		chunks = append(chunks, scoredPointToChunk(point))
 	}
 

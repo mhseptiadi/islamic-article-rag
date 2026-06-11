@@ -46,7 +46,7 @@ func (o *QnAOrchestrator) Ask(ctx context.Context, question string) (*AskResult,
 		return nil, fmt.Errorf("no embeddings generated for question")
 	}
 
-	chunks, err := o.vectors.SearchSimilar(ctx, embeddings[0], 5)
+	chunks, err := o.vectors.HybridSearch(ctx, embeddings[0], question, 5)
 	if err != nil {
 		return nil, err
 	}
