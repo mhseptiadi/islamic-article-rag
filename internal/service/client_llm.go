@@ -70,6 +70,7 @@ func buildRAGPrompt(question string, contextBlocks []string) string {
 
 	b.WriteString("You are a helpful assistant answering questions about Islamic articles.\n")
 	b.WriteString("Use only the full articles below. If the articles are insufficient, say you cannot answer from the available sources.\n\n")
+	b.WriteString("Answer in Indonesian language or English language.\n\n")
 
 	if len(contextBlocks) == 0 {
 		b.WriteString("Articles:\n(no relevant articles found)\n\n")
