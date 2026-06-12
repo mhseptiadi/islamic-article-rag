@@ -18,6 +18,7 @@ type Config struct {
 	RawArticlesDir       string
 	ChunkWindowSize      int
 	ChunkStepSize        int
+	MaxChunkChars        int
 	OllamaEmbeddingURL   string
 	OllamaEmbeddingModel string
 	OllamaLLMURL         string
@@ -38,6 +39,7 @@ func Load() (*Config, error) {
 		RawArticlesDir:          getEnv("RAW_ARTICLES_DIR", "data/raw_articles"),
 		ChunkWindowSize:         getEnvInt("CHUNK_WINDOW_SIZE", 3),
 		ChunkStepSize:           getEnvInt("CHUNK_STEP_SIZE", 2),
+		MaxChunkChars:           getEnvInt("MAX_CHUNK_CHARS", 6000),
 		OllamaEmbeddingURL:      getEnv("OLLAMA_EMBEDDING_URL", "http://localhost:11434/api/embeddings"),
 		OllamaEmbeddingModel:    getEnv("OLLAMA_EMBEDDING_MODEL", "bge-m3"),
 		OllamaLLMURL:            getEnv("OLLAMA_LLM_URL", "http://localhost:11434/api/generate"),

@@ -30,7 +30,7 @@ func main() {
 	}
 	defer articles.Close()
 
-	ingestion := service.NewIngestionService(embedder, vectors, articles)
+	ingestion := service.NewIngestionService(embedder, vectors, articles, cfg.MaxChunkChars)
 
 	count, err := ingestion.IngestDirectory(
 		context.Background(),

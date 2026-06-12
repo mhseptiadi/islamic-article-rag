@@ -17,20 +17,23 @@ import (
 )
 
 type IngestionService struct {
-	embedder *EmbeddingClient
-	vectors  *qdrant.VectorRepository
-	articles *qdrant.ArticleRepository
+	embedder      *EmbeddingClient
+	vectors       *qdrant.VectorRepository
+	articles      *qdrant.ArticleRepository
+	maxChunkChars int
 }
 
 func NewIngestionService(
 	embedder *EmbeddingClient,
 	vectors *qdrant.VectorRepository,
 	articles *qdrant.ArticleRepository,
+	maxChunkChars int,
 ) *IngestionService {
 	return &IngestionService{
-		embedder: embedder,
-		vectors:  vectors,
-		articles: articles,
+		embedder:      embedder,
+		vectors:       vectors,
+		articles:      articles,
+		maxChunkChars: maxChunkChars,
 	}
 }
 
@@ -40,7 +43,7 @@ func (s *IngestionService) IngestDirectory(ctx context.Context, rawDir string, w
 		return 0, fmt.Errorf("read directory %s: %w", rawDir, err)
 	}
 
-	var allChunks []model.Chunk
+	totalChunks := 0
 
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
@@ -73,19 +76,17 @@ func (s *IngestionService) IngestDirectory(ctx context.Context, rawDir string, w
 			return 0, fmt.Errorf("process file %s: %w", entry.Name(), err)
 		}
 
-		allChunks = append(allChunks, chunks...)
-		fmt.Printf("Processed file: %s\n", entry.Name())
+		if len(chunks) > 0 {
+			if err := s.vectors.InsertChunks(ctx, chunks); err != nil {
+				return totalChunks, fmt.Errorf("insert chunks for %s: %w", entry.Name(), err)
+			}
+			totalChunks += len(chunks)
+		}
+
+		fmt.Printf("Processed file: %s (%d chunks)\n", entry.Name(), len(chunks))
 	}
 
-	if len(allChunks) == 0 {
-		return 0, nil
-	}
-
-	if err := s.vectors.InsertChunks(ctx, allChunks); err != nil {
-		return 0, err
-	}
-
-	return len(allChunks), nil
+	return totalChunks, nil
 }
 
 func (s *IngestionService) IngestArticle(ctx context.Context, articleID, title, body, sourceURL string) error {
@@ -106,36 +107,44 @@ func (s *IngestionService) IngestArticle(ctx context.Context, articleID, title, 
 	chunks := make([]model.Chunk, 0, len(paragraphs))
 
 	for i, paragraph := range paragraphs {
+		paragraph = removeArabicText(paragraph)
+		if !isEmbeddableChunk(paragraph) {
+			continue
+		}
+
 		refs := regexutil.ExtractQuranReferences(paragraph)
 		refStrings := make([]string, len(refs))
 		for j, ref := range refs {
 			refStrings[j] = ref.Raw
 		}
 
-		paragraph = removeArabicText(paragraph)
-		if !isEmbeddableChunk(paragraph) {
-			continue
-		}
+		subChunks := splitByMaxChars(paragraph, s.maxChunkChars)
+		for j, subText := range subChunks {
+			embeddings, err := s.embedder.Embed(ctx, []string{subText})
+			if err != nil {
+				return err
+			}
 
-		embeddings, err := s.embedder.Embed(ctx, []string{paragraph})
-		if err != nil {
-			return err
-		}
+			chunkID := articleID + "-" + strconv.Itoa(i)
+			if len(subChunks) > 1 {
+				chunkID += "-" + strconv.Itoa(j)
+			}
 
-		chunks = append(chunks, model.Chunk{
-			ID:          articleID + "-" + strconv.Itoa(i),
-			DenseVector: embeddings[0],
-			Payload: model.Payload{
-				Text: paragraph,
-				Metadata: model.Metadata{
-					ArticleID:    articleID,
-					Title:        title,
-					SourceURL:    sourceURL,
-					QuranRefs:    refStrings,
-					ParagraphIdx: i,
+			chunks = append(chunks, model.Chunk{
+				ID:          chunkID,
+				DenseVector: embeddings[0],
+				Payload: model.Payload{
+					Text: subText,
+					Metadata: model.Metadata{
+						ArticleID:    articleID,
+						Title:        title,
+						SourceURL:    sourceURL,
+						QuranRefs:    refStrings,
+						ParagraphIdx: i,
+					},
 				},
-			},
-		})
+			})
+		}
 	}
 
 	return s.vectors.InsertChunks(ctx, chunks)
@@ -167,23 +176,25 @@ func (s *IngestionService) chunkFile(ctx context.Context, content, sourceURL, ar
 			refStrings[j] = ref.Raw
 		}
 
-		embeddings, err := s.embedder.Embed(ctx, []string{chunkText})
-		if err != nil {
-			return nil, err
-		}
+		for _, subText := range splitByMaxChars(chunkText, s.maxChunkChars) {
+			embeddings, err := s.embedder.Embed(ctx, []string{subText})
+			if err != nil {
+				return nil, err
+			}
 
-		chunks = append(chunks, model.Chunk{
-			ID:          uuid.New().String(),
-			DenseVector: embeddings[0],
-			Payload: model.Payload{
-				Text: chunkText,
-				Metadata: model.Metadata{
-					ArticleID: articleID,
-					SourceURL: sourceURL,
-					QuranRefs: refStrings,
+			chunks = append(chunks, model.Chunk{
+				ID:          uuid.New().String(),
+				DenseVector: embeddings[0],
+				Payload: model.Payload{
+					Text: subText,
+					Metadata: model.Metadata{
+						ArticleID: articleID,
+						SourceURL: sourceURL,
+						QuranRefs: refStrings,
+					},
 				},
-			},
-		})
+			})
+		}
 
 		if end == len(paragraphs) {
 			break
@@ -223,4 +234,27 @@ func isEmbeddableChunk(text string) bool {
 		}
 	}
 	return false
+}
+
+func splitByMaxChars(text string, maxChars int) []string {
+	text = strings.TrimSpace(text)
+	if maxChars <= 0 || len(text) <= maxChars {
+		return []string{text}
+	}
+
+	var parts []string
+	for len(text) > maxChars {
+		cut := maxChars
+		if idx := strings.LastIndex(text[:cut], "\n"); idx > maxChars/2 {
+			cut = idx
+		} else if idx := strings.LastIndex(text[:cut], " "); idx > maxChars/2 {
+			cut = idx
+		}
+		parts = append(parts, strings.TrimSpace(text[:cut]))
+		text = strings.TrimSpace(text[cut:])
+	}
+	if text != "" {
+		parts = append(parts, text)
+	}
+	return parts
 }
