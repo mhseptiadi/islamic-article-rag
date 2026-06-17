@@ -1,8 +1,13 @@
 package config
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
+
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -13,7 +18,10 @@ type Config struct {
 	QdrantCollection        string
 	QdrantArticleCollection string
 	EmbeddingAPIKey         string
+	LLMProvider             string
 	LLMAPIKey               string
+	LLMApiURL               string
+	LLMModel                string
 
 	RawArticlesDir       string
 	ChunkWindowSize      int
@@ -21,42 +29,51 @@ type Config struct {
 	MaxChunkChars        int
 	OllamaEmbeddingURL   string
 	OllamaEmbeddingModel string
-	OllamaLLMURL         string
-	OllamaLLMModel       string
 	MinSimilarityScore   float64
 }
 
 func Load() (*Config, error) {
+	fileEnv, err := loadFileEnv()
+	if err != nil {
+		return nil, fmt.Errorf("load .env: %w", err)
+	}
+
+	provider := getEnv("LLM_PROVIDER", "ollama", fileEnv)
+
 	return &Config{
-		HTTPPort:                getEnv("HTTP_PORT", "8080"),
-		QdrantURL:               getEnv("QDRANT_URL", "http://localhost:6333"),
-		QdrantHost:              getEnv("QDRANT_HOST", "localhost"),
-		QdrantGRPCPort:          getEnvInt("QDRANT_GRPC_PORT", 6334),
-		QdrantCollection:        getEnv("QDRANT_COLLECTION", "indonesian_articles"),
-		QdrantArticleCollection: getEnv("QDRANT_ARTICLE_COLLECTION", "indonesian_articles_full"),
-		EmbeddingAPIKey:         os.Getenv("EMBEDDING_API_KEY"),
-		LLMAPIKey:               os.Getenv("LLM_API_KEY"),
-		RawArticlesDir:          getEnv("RAW_ARTICLES_DIR", "data/raw_articles"),
-		ChunkWindowSize:         getEnvInt("CHUNK_WINDOW_SIZE", 3),
-		ChunkStepSize:           getEnvInt("CHUNK_STEP_SIZE", 2),
-		MaxChunkChars:           getEnvInt("MAX_CHUNK_CHARS", 6000),
-		OllamaEmbeddingURL:      getEnv("OLLAMA_EMBEDDING_URL", "http://localhost:11434/api/embeddings"),
-		OllamaEmbeddingModel:    getEnv("OLLAMA_EMBEDDING_MODEL", "bge-m3"),
-		OllamaLLMURL:            getEnv("OLLAMA_LLM_URL", "http://localhost:11434/api/generate"),
-		OllamaLLMModel:          getEnv("OLLAMA_LLM_MODEL", "qwen2.5:7b"),
-		MinSimilarityScore:      getEnvFloat("MIN_SIMILARITY_SCORE", 0.40),
+		HTTPPort:                getEnv("HTTP_PORT", "8080", fileEnv),
+		QdrantURL:               getEnv("QDRANT_URL", "http://localhost:6333", fileEnv),
+		QdrantHost:              getEnv("QDRANT_HOST", "localhost", fileEnv),
+		QdrantGRPCPort:          getEnvInt("QDRANT_GRPC_PORT", 6334, fileEnv),
+		QdrantCollection:        getEnv("QDRANT_COLLECTION", "indonesian_articles", fileEnv),
+		QdrantArticleCollection: getEnv("QDRANT_ARTICLE_COLLECTION", "indonesian_articles_full", fileEnv),
+		EmbeddingAPIKey:         getEnv("EMBEDDING_API_KEY", "", fileEnv),
+		LLMProvider:             provider,
+		LLMAPIKey:               getEnv("LLM_API_KEY", "", fileEnv),
+		LLMApiURL:               getEnv("LLM_API_URL", "http://localhost:11434/api/generate", fileEnv),
+		LLMModel:                getEnv("LLM_MODEL", "qwen2.5:7b", fileEnv),
+		RawArticlesDir:          getEnv("RAW_ARTICLES_DIR", "data/raw_articles", fileEnv),
+		ChunkWindowSize:         getEnvInt("CHUNK_WINDOW_SIZE", 3, fileEnv),
+		ChunkStepSize:           getEnvInt("CHUNK_STEP_SIZE", 2, fileEnv),
+		MaxChunkChars:           getEnvInt("MAX_CHUNK_CHARS", 6000, fileEnv),
+		OllamaEmbeddingURL:      getEnv("OLLAMA_EMBEDDING_URL", "http://localhost:11434/api/embeddings", fileEnv),
+		OllamaEmbeddingModel:    getEnv("OLLAMA_EMBEDDING_MODEL", "bge-m3", fileEnv),
+		MinSimilarityScore:      getEnvFloat("MIN_SIMILARITY_SCORE", 0.40, fileEnv),
 	}, nil
 }
 
-func getEnv(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
+func getEnv(key, fallback string, fileEnv map[string]string) string {
+	if v, ok := fileEnv[key]; ok {
+		return v
+	}
+	if v, ok := os.LookupEnv(key); ok {
 		return v
 	}
 	return fallback
 }
 
-func getEnvInt(key string, fallback int) int {
-	v := os.Getenv(key)
+func getEnvInt(key string, fallback int, fileEnv map[string]string) int {
+	v := getEnv(key, "", fileEnv)
 	if v == "" {
 		return fallback
 	}
@@ -67,8 +84,8 @@ func getEnvInt(key string, fallback int) int {
 	return n
 }
 
-func getEnvFloat(key string, fallback float64) float64 {
-	v := os.Getenv(key)
+func getEnvFloat(key string, fallback float64, fileEnv map[string]string) float64 {
+	v := getEnv(key, "", fileEnv)
 	if v == "" {
 		return fallback
 	}
@@ -77,4 +94,61 @@ func getEnvFloat(key string, fallback float64) float64 {
 		return fallback
 	}
 	return n
+}
+
+func loadFileEnv() (map[string]string, error) {
+	path, err := findDotEnv()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[string]string{}, nil
+		}
+		return nil, err
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return godotenv.Unmarshal(string(stripSemicolonComments(data)))
+}
+
+func findDotEnv() (string, error) {
+	if path := os.Getenv("ENV_FILE"); path != "" {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	for {
+		path := filepath.Join(dir, ".env")
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+
+	return "", os.ErrNotExist
+}
+
+func stripSemicolonComments(data []byte) []byte {
+	var cleaned strings.Builder
+	for line := range strings.SplitSeq(string(data), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), ";") {
+			continue
+		}
+		cleaned.WriteString(line)
+		cleaned.WriteByte('\n')
+	}
+	return []byte(cleaned.String())
 }

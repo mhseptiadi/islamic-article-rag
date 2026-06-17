@@ -18,7 +18,7 @@ func main() {
 	}
 
 	embedder := service.NewEmbeddingClient(cfg.EmbeddingAPIKey, cfg.OllamaEmbeddingURL, cfg.OllamaEmbeddingModel)
-	llm := service.NewLLMClient(cfg.LLMAPIKey, cfg.OllamaLLMURL, cfg.OllamaLLMModel)
+	llm := service.NewLLMClient(cfg.LLMProvider, cfg.LLMAPIKey, cfg.LLMApiURL, cfg.LLMModel)
 
 	vectors, err := qdrant.NewVectorRepository(cfg.QdrantHost, cfg.QdrantGRPCPort, cfg.QdrantCollection, cfg.MinSimilarityScore)
 	if err != nil {
