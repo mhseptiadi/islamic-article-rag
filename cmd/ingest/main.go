@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/mhseptiadi/islamic-article-rag/internal/config"
+	"github.com/mhseptiadi/islamic-article-rag/internal/repository/mongo"
 	"github.com/mhseptiadi/islamic-article-rag/internal/repository/qdrant"
 	"github.com/mhseptiadi/islamic-article-rag/internal/service"
 )
@@ -24,9 +25,9 @@ func main() {
 	}
 	defer vectors.Close()
 
-	articles, err := qdrant.NewArticleRepository(cfg.QdrantHost, cfg.QdrantGRPCPort, cfg.QdrantArticleCollection)
+	articles, err := mongo.NewArticleRepository(cfg.MongoURI, cfg.MongoDatabase, cfg.MongoArticlesCollection)
 	if err != nil {
-		log.Fatalf("connect to qdrant articles: %v", err)
+		log.Fatalf("connect to mongodb articles: %v", err)
 	}
 	defer articles.Close()
 

@@ -8,7 +8,7 @@ services:
       - ./qdrant_storage:/qdrant/storage
     restart: unless-stopped
 
-  # Creates indonesian_articles if missing (Qdrant has no declarative collection config in compose).
+  # Creates indonesian_articles (chunk vectors) if missing.
   qdrant-init:
     image: curlimages/curl:latest
     depends_on:
@@ -22,15 +22,10 @@ services:
     entrypoint: ["/bin/sh", "/init/bootstrap.sh"]
     restart: "no"
 
-  qdrant-init-articles:
-    image: curlimages/curl:latest
-    depends_on:
-      - qdrant
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
     volumes:
-      - ./config/qdrant/indonesian_articles_full.json:/init/collection.json:ro
-      - ./scripts/qdrant-init-collection.sh:/init/bootstrap.sh:ro
-    environment:
-      COLLECTION: indonesian_articles_full
-      CONFIG_FILE: /init/collection.json
-    entrypoint: ["/bin/sh", "/init/bootstrap.sh"]
-    restart: "no"
+      - ./mongo_storage:/data/db
+    restart: unless-stopped

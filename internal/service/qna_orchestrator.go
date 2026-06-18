@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/mhseptiadi/islamic-article-rag/internal/model"
+	"github.com/mhseptiadi/islamic-article-rag/internal/repository/mongo"
 	"github.com/mhseptiadi/islamic-article-rag/internal/repository/qdrant"
 )
 
@@ -18,7 +19,7 @@ type QnAOrchestrator struct {
 	embedder       *EmbeddingClient
 	llm            *LLMClient
 	vectors        *qdrant.VectorRepository
-	articles       *qdrant.ArticleRepository
+	articles       *mongo.ArticleRepository
 	retrievalLimit int
 	contextSource  string
 }
@@ -27,7 +28,7 @@ func NewQnAOrchestrator(
 	embedder *EmbeddingClient,
 	llm *LLMClient,
 	vectors *qdrant.VectorRepository,
-	articles *qdrant.ArticleRepository,
+	articles *mongo.ArticleRepository,
 	retrievalLimit int,
 	contextSource string,
 ) *QnAOrchestrator {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mhseptiadi/islamic-article-rag/internal/model"
+	"github.com/mhseptiadi/islamic-article-rag/internal/repository/mongo"
 	"github.com/mhseptiadi/islamic-article-rag/internal/repository/qdrant"
 	"github.com/mhseptiadi/islamic-article-rag/pkg/regexutil"
 )
@@ -19,14 +20,14 @@ import (
 type IngestionService struct {
 	embedder      *EmbeddingClient
 	vectors       *qdrant.VectorRepository
-	articles      *qdrant.ArticleRepository
+	articles      *mongo.ArticleRepository
 	maxChunkChars int
 }
 
 func NewIngestionService(
 	embedder *EmbeddingClient,
 	vectors *qdrant.VectorRepository,
-	articles *qdrant.ArticleRepository,
+	articles *mongo.ArticleRepository,
 	maxChunkChars int,
 ) *IngestionService {
 	return &IngestionService{
@@ -62,6 +63,15 @@ func (s *IngestionService) IngestDirectory(ctx context.Context, rawDir string, w
 			sourceURL = fmt.Sprintf("file://%s", entry.Name())
 		}
 
+		existing, err := s.articles.GetByURL(ctx, sourceURL)
+		if err != nil {
+			return 0, fmt.Errorf("check article %s: %w", entry.Name(), err)
+		}
+		if existing != nil {
+			fmt.Printf("Skipped file (duplicate URL): %s\n", entry.Name())
+			continue
+		}
+
 		articleID := uuid.New().String()
 		if err := s.articles.InsertArticle(ctx, model.Article{
 			ID:   articleID,
@@ -90,6 +100,14 @@ func (s *IngestionService) IngestDirectory(ctx context.Context, rawDir string, w
 }
 
 func (s *IngestionService) IngestArticle(ctx context.Context, articleID, title, body, sourceURL string) error {
+	existing, err := s.articles.GetByURL(ctx, sourceURL)
+	if err != nil {
+		return err
+	}
+	if existing != nil {
+		return nil
+	}
+
 	fullText := body
 	if title != "" {
 		fullText = title + "\n\n" + body

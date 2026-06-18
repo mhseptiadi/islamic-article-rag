@@ -1,9 +1,9 @@
 package model
 
 type Article struct {
-	ID   string `json:"id"`
-	Text string `json:"text"`
-	URL  string `json:"url"`
+	ID   string `json:"id" bson:"_id"`
+	Text string `json:"text" bson:"text"`
+	URL  string `json:"url" bson:"url"`
 }
 
 type Metadata struct {
