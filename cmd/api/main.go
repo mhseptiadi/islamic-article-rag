@@ -33,7 +33,17 @@ func main() {
 	}
 	defer articles.Close()
 
-	orchestrator := service.NewQnAOrchestrator(embedder, llm, vectors, articles, cfg.QnARetrievalLimit, cfg.QnAContextSource)
+	qnaRecords, err := mongo.NewQnARepository(cfg.MongoURI, cfg.MongoDatabase, cfg.MongoQnACollection)
+	if err != nil {
+		log.Fatalf("connect to mongodb qna records: %v", err)
+	}
+	defer qnaRecords.Close()
+
+	orchestrator := service.NewQnAOrchestrator(
+		embedder, llm, vectors, articles, qnaRecords,
+		cfg.QnARetrievalLimit, cfg.QnAContextSource,
+		cfg.LLMProvider, cfg.LLMModel,
+	)
 	qnaHandler := handler.NewQnAHandler(orchestrator)
 
 	mux := http.NewServeMux()

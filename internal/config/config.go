@@ -20,6 +20,7 @@ type Config struct {
 	MongoURI                string
 	MongoDatabase           string
 	MongoArticlesCollection string
+	MongoQnACollection      string
 	EmbeddingAPIKey         string
 	LLMProvider             string
 	LLMAPIKey               string
@@ -55,6 +56,7 @@ func Load() (*Config, error) {
 		MongoURI:                getEnv("MONGO_URI", "mongodb://localhost:27017", fileEnv),
 		MongoDatabase:           getEnv("MONGO_DATABASE", "islamic_article_rag", fileEnv),
 		MongoArticlesCollection: getEnv("MONGO_ARTICLES_COLLECTION", "articles", fileEnv),
+		MongoQnACollection:      getEnv("MONGO_QNA_COLLECTION", "qna_records", fileEnv),
 		EmbeddingAPIKey:         getEnv("EMBEDDING_API_KEY", "", fileEnv),
 		LLMProvider:             provider,
 		LLMAPIKey:               getEnv("LLM_API_KEY", "", fileEnv),

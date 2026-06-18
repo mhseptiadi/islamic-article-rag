@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/mhseptiadi/islamic-article-rag/internal/model"
 	"github.com/mhseptiadi/islamic-article-rag/internal/repository/mongo"
 	"github.com/mhseptiadi/islamic-article-rag/internal/repository/qdrant"
@@ -20,8 +22,11 @@ type QnAOrchestrator struct {
 	llm            *LLMClient
 	vectors        *qdrant.VectorRepository
 	articles       *mongo.ArticleRepository
+	qnaRecords     *mongo.QnARepository
 	retrievalLimit int
 	contextSource  string
+	llmProvider    string
+	llmModel       string
 }
 
 func NewQnAOrchestrator(
@@ -29,16 +34,22 @@ func NewQnAOrchestrator(
 	llm *LLMClient,
 	vectors *qdrant.VectorRepository,
 	articles *mongo.ArticleRepository,
+	qnaRecords *mongo.QnARepository,
 	retrievalLimit int,
 	contextSource string,
+	llmProvider string,
+	llmModel string,
 ) *QnAOrchestrator {
 	return &QnAOrchestrator{
 		embedder:       embedder,
 		llm:            llm,
 		vectors:        vectors,
 		articles:       articles,
+		qnaRecords:     qnaRecords,
 		retrievalLimit: retrievalLimit,
 		contextSource:  contextSource,
+		llmProvider:    llmProvider,
+		llmModel:       llmModel,
 	}
 }
 
@@ -88,6 +99,20 @@ func (o *QnAOrchestrator) Ask(ctx context.Context, question string) (*AskResult,
 	answer, err := o.llm.GenerateAnswer(ctx, question, contextBlocks)
 	if err != nil {
 		return nil, err
+	}
+
+	if err := o.qnaRecords.Insert(ctx, model.QnARecord{
+		ID:            uuid.New().String(),
+		Question:      question,
+		Answer:        answer,
+		LLMProvider:   o.llmProvider,
+		LLMModel:      o.llmModel,
+		ContextSource: o.contextSource,
+		ArticleIDs:    articleIDsFromArticles(fullArticles),
+		Chunks:        chunksForQnARecord(chunks),
+		CreatedAt:     time.Now().UTC(),
+	}); err != nil {
+		return nil, fmt.Errorf("record qna: %w", err)
 	}
 
 	return &AskResult{
@@ -171,6 +196,30 @@ func formatArticleForContext(article *model.Article) string {
 	}
 	b.WriteString(article.Text)
 	return b.String()
+}
+
+func articleIDsFromArticles(articles []model.Article) []string {
+	ids := make([]string, 0, len(articles))
+	for _, article := range articles {
+		if article.ID != "" {
+			ids = append(ids, article.ID)
+		}
+	}
+	return ids
+}
+
+func chunksForQnARecord(chunks []model.Chunk) []model.QnAChunk {
+	refs := make([]model.QnAChunk, 0, len(chunks))
+	for _, chunk := range chunks {
+		if chunk.ID == "" {
+			continue
+		}
+		refs = append(refs, model.QnAChunk{
+			ID:    chunk.ID,
+			Score: chunk.Score,
+		})
+	}
+	return refs
 }
 
 func formatChunkForContext(chunk *model.Chunk) string {
