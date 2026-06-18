@@ -30,6 +30,8 @@ type Config struct {
 	OllamaEmbeddingURL   string
 	OllamaEmbeddingModel string
 	MinSimilarityScore   float64
+	QnARetrievalLimit    int
+	QnAContextSource     string
 }
 
 func Load() (*Config, error) {
@@ -59,6 +61,8 @@ func Load() (*Config, error) {
 		OllamaEmbeddingURL:      getEnv("OLLAMA_EMBEDDING_URL", "http://localhost:11434/api/embeddings", fileEnv),
 		OllamaEmbeddingModel:    getEnv("OLLAMA_EMBEDDING_MODEL", "bge-m3", fileEnv),
 		MinSimilarityScore:      getEnvFloat("MIN_SIMILARITY_SCORE", 0.40, fileEnv),
+		QnARetrievalLimit:       getEnvInt("QNA_RETRIEVAL_LIMIT", 5, fileEnv),
+		QnAContextSource:        getEnv("QNA_CONTEXT_SOURCE", "chunks", fileEnv),
 	}, nil
 }
 

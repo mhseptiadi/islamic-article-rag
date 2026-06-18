@@ -9,11 +9,18 @@ import (
 	"github.com/mhseptiadi/islamic-article-rag/internal/repository/qdrant"
 )
 
+const (
+	ContextSourceFullArticles = "full_articles"
+	ContextSourceChunks       = "chunks"
+)
+
 type QnAOrchestrator struct {
-	embedder *EmbeddingClient
-	llm      *LLMClient
-	vectors  *qdrant.VectorRepository
-	articles *qdrant.ArticleRepository
+	embedder       *EmbeddingClient
+	llm            *LLMClient
+	vectors        *qdrant.VectorRepository
+	articles       *qdrant.ArticleRepository
+	retrievalLimit int
+	contextSource  string
 }
 
 func NewQnAOrchestrator(
@@ -21,12 +28,16 @@ func NewQnAOrchestrator(
 	llm *LLMClient,
 	vectors *qdrant.VectorRepository,
 	articles *qdrant.ArticleRepository,
+	retrievalLimit int,
+	contextSource string,
 ) *QnAOrchestrator {
 	return &QnAOrchestrator{
-		embedder: embedder,
-		llm:      llm,
-		vectors:  vectors,
-		articles: articles,
+		embedder:       embedder,
+		llm:            llm,
+		vectors:        vectors,
+		articles:       articles,
+		retrievalLimit: retrievalLimit,
+		contextSource:  contextSource,
 	}
 }
 
@@ -46,19 +57,31 @@ func (o *QnAOrchestrator) Ask(ctx context.Context, question string) (*AskResult,
 		return nil, fmt.Errorf("no embeddings generated for question")
 	}
 
-	chunks, err := o.vectors.HybridSearch(ctx, embeddings[0], question, 1)
+	chunks, err := o.vectors.HybridSearch(ctx, embeddings[0], question, o.retrievalLimit)
 	if err != nil {
 		return nil, err
 	}
 
-	fullArticles, err := o.resolveFullArticles(ctx, chunks)
-	if err != nil {
-		return nil, err
-	}
+	var (
+		fullArticles  []model.Article
+		contextBlocks []string
+	)
 
-	contextBlocks := make([]string, len(fullArticles))
-	for i := range fullArticles {
-		contextBlocks[i] = formatArticleForContext(&fullArticles[i])
+	switch o.contextSource {
+	case ContextSourceChunks:
+		contextBlocks = make([]string, len(chunks))
+		for i := range chunks {
+			contextBlocks[i] = formatChunkForContext(&chunks[i])
+		}
+	default:
+		fullArticles, err = o.resolveFullArticles(ctx, chunks)
+		if err != nil {
+			return nil, err
+		}
+		contextBlocks = make([]string, len(fullArticles))
+		for i := range fullArticles {
+			contextBlocks[i] = formatArticleForContext(&fullArticles[i])
+		}
 	}
 
 	answer, err := o.llm.GenerateAnswer(ctx, question, contextBlocks)
@@ -146,5 +169,21 @@ func formatArticleForContext(article *model.Article) string {
 		b.WriteString("\n\n")
 	}
 	b.WriteString(article.Text)
+	return b.String()
+}
+
+func formatChunkForContext(chunk *model.Chunk) string {
+	var b strings.Builder
+	meta := chunk.Payload.Metadata
+	if meta.SourceURL != "" {
+		b.WriteString("Source: ")
+		b.WriteString(meta.SourceURL)
+		b.WriteString("\n\n")
+	}
+	if meta.Title != "" {
+		b.WriteString(meta.Title)
+		b.WriteString("\n\n")
+	}
+	b.WriteString(chunk.Payload.Text)
 	return b.String()
 }

@@ -32,7 +32,7 @@ func main() {
 	}
 	defer articles.Close()
 
-	orchestrator := service.NewQnAOrchestrator(embedder, llm, vectors, articles)
+	orchestrator := service.NewQnAOrchestrator(embedder, llm, vectors, articles, cfg.QnARetrievalLimit, cfg.QnAContextSource)
 	qnaHandler := handler.NewQnAHandler(orchestrator)
 
 	mux := http.NewServeMux()
