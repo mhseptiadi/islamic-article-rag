@@ -22,8 +22,6 @@ func newSparseVectors(sparse model.SparseVector) *qdrant.Vectors {
 }
 
 // newNamedVectors builds a point with dense and BM25 sparse vectors.
-// Sparse is generated server-side from sparseText; Qdrant applies collection-level
-// IDF when the sparse vector is configured with modifier "idf".
 func newNamedVectors(dense []float32, sparseText string) *qdrant.Vectors {
 	vectors := map[string]*qdrant.Vector{
 		DenseVectorName: qdrant.NewVectorDense(dense),
