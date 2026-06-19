@@ -55,11 +55,57 @@ Edit `.env` as needed. The defaults assume Qdrant on `localhost:6333` and Ollama
 
 ### 2. Start Qdrant
 
+**Local (Docker)**
+
 ```bash
 docker compose up -d
 ```
 
-This starts Qdrant and bootstraps both collections from `config/qdrant/`. The dashboard is available at [http://localhost:6333/dashboard](http://localhost:6333/dashboard).
+This starts Qdrant and runs `scripts/qdrant-init-collection.sh` via the `qdrant-init` service, creating the `indonesian_articles` collection from `config/qdrant/indonesian_articles.json` if it does not exist. The dashboard is at [http://localhost:6333/dashboard](http://localhost:6333/dashboard).
+
+**Qdrant Cloud**
+
+Set your cluster host and API key in `.env`:
+
+```env
+QDRANT_HOST=<cluster-id>.gcp.cloud.qdrant.io
+QDRANT_API_KEY=<your-api-key>
+QDRANT_GRPC_PORT=6334
+```
+
+Then bootstrap the collection (requires `curl`):
+
+```bash
+set -a && source .env && set +a
+./scripts/qdrant-init-collection.sh
+```
+
+On Windows Git Bash, the same `source .env` line works if your shell supports it; otherwise export `QDRANT_HOST` and `QDRANT_API_KEY` manually before running the script.
+
+**Run the script manually (any environment)**
+
+The script is idempotent — it skips creation if the collection already exists.
+
+| Variable | Default | Description |
+|---|---|---|
+| `QDRANT_HOST` | — | Cluster hostname (no `https://`); used when `QDRANT_URL` is unset |
+| `QDRANT_URL` | `http://qdrant:6333` | Full REST base URL; overrides host-based resolution |
+| `QDRANT_API_KEY` | — | Required for Qdrant Cloud; enables HTTPS and sends the `api-key` header |
+| `QDRANT_REST_PORT` | `6333` | REST port when building URL from `QDRANT_HOST` |
+| `COLLECTION` | `indonesian_articles` | Collection name to create |
+| `CONFIG_FILE` | `config/qdrant/indonesian_articles.json` | Collection schema JSON |
+
+Examples:
+
+```bash
+# Local Qdrant (no API key)
+QDRANT_HOST=localhost ./scripts/qdrant-init-collection.sh
+
+# Explicit REST URL
+QDRANT_URL=https://my-cluster.gcp.cloud.qdrant.io:6333 \
+QDRANT_API_KEY=your-key \
+./scripts/qdrant-init-collection.sh
+```
 
 ### 3. Add articles
 
@@ -125,8 +171,10 @@ Environment variables are loaded from `.env` (walked up from the working directo
 | Variable | Default | Description |
 |---|---|---|
 | `HTTP_PORT` | `8080` | API listen port |
-| `QDRANT_HOST` | `localhost` | Qdrant gRPC host |
+| `QDRANT_HOST` | `localhost` | Qdrant gRPC host (hostname only, no `https://`) |
+| `QDRANT_API_KEY` | | Qdrant Cloud API key; enables TLS for the Go gRPC client |
 | `QDRANT_GRPC_PORT` | `6334` | Qdrant gRPC port |
+| `QDRANT_URL` | `http://localhost:6333` | Qdrant REST URL (used by `scripts/qdrant-init-collection.sh`) |
 | `QDRANT_COLLECTION` | `indonesian_articles` | Chunk collection name |
 | `QDRANT_ARTICLE_COLLECTION` | `indonesian_articles_full` | Full-article collection name |
 | `LLM_PROVIDER` | `ollama` | `ollama`, `google`, or `groq` |

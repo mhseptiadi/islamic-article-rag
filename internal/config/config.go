@@ -11,9 +11,10 @@ import (
 )
 
 type Config struct {
-	HTTPPort                string
-	QdrantURL               string
+	HTTPPort string
+	// QdrantURL               string
 	QdrantHost              string
+	QdrantAPIKey            string
 	QdrantGRPCPort          int
 	QdrantCollection        string
 	QdrantArticleCollection string
@@ -36,6 +37,12 @@ type Config struct {
 	MinSimilarityScore   float64
 	QnARetrievalLimit    int
 	QnAContextSource     string
+
+	RedisURL              string
+	MaxIPRequestPerMinute int
+	MaxRequestPerMinute   int
+	MaxRequestPerDay      int
+	MaxQuestionChars      int
 }
 
 func Load() (*Config, error) {
@@ -47,9 +54,10 @@ func Load() (*Config, error) {
 	provider := getEnv("LLM_PROVIDER", "ollama", fileEnv)
 
 	return &Config{
-		HTTPPort:                getEnv("HTTP_PORT", "8080", fileEnv),
-		QdrantURL:               getEnv("QDRANT_URL", "http://localhost:6333", fileEnv),
+		HTTPPort: getEnv("HTTP_PORT", "8080", fileEnv),
+		// QdrantURL:               getEnv("QDRANT_URL", "http://localhost:6333", fileEnv),
 		QdrantHost:              getEnv("QDRANT_HOST", "localhost", fileEnv),
+		QdrantAPIKey:            getEnv("QDRANT_API_KEY", "", fileEnv),
 		QdrantGRPCPort:          getEnvInt("QDRANT_GRPC_PORT", 6334, fileEnv),
 		QdrantCollection:        getEnv("QDRANT_COLLECTION", "indonesian_articles", fileEnv),
 		QdrantArticleCollection: getEnv("QDRANT_ARTICLE_COLLECTION", "indonesian_articles_full", fileEnv),
@@ -71,6 +79,11 @@ func Load() (*Config, error) {
 		MinSimilarityScore:      getEnvFloat("MIN_SIMILARITY_SCORE", 0.40, fileEnv),
 		QnARetrievalLimit:       getEnvInt("QNA_RETRIEVAL_LIMIT", 5, fileEnv),
 		QnAContextSource:        getEnv("QNA_CONTEXT_SOURCE", "chunks", fileEnv),
+		RedisURL:                getEnv("REDIS_URL", "redis://localhost:6379", fileEnv),
+		MaxIPRequestPerMinute:   getEnvInt("MAX_IP_REQUESTS_PER_MINUTE", 5, fileEnv),
+		MaxRequestPerMinute:     getEnvInt("MAX_REQUESTS_PER_MINUTE", 30, fileEnv),
+		MaxRequestPerDay:        getEnvInt("MAX_REQUESTS_PER_DAY", 1000, fileEnv),
+		MaxQuestionChars:        getEnvInt("MAX_QUESTION_CHARS", 200, fileEnv),
 	}, nil
 }
 

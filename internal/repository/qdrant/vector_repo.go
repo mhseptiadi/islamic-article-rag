@@ -16,10 +16,13 @@ type VectorRepository struct {
 	minSimilarityScore float32
 }
 
-func NewVectorRepository(host string, grpcPort int, collectionName string, minSimilarityScore float64) (*VectorRepository, error) {
+func NewVectorRepository(host string, apiKey string, grpcPort int, collectionName string, minSimilarityScore float64) (*VectorRepository, error) {
+	host = normalizeQdrantHost(host)
 	client, err := qdrant.NewClient(&qdrant.Config{
-		Host: host,
-		Port: grpcPort,
+		Host:   host,
+		APIKey: apiKey,
+		Port:   grpcPort,
+		UseTLS: apiKey != "",
 	})
 	if err != nil {
 		return nil, fmt.Errorf("connect to qdrant: %w", err)
@@ -225,4 +228,14 @@ func payloadStringList(payload map[string]*qdrant.Value, key string) []string {
 		}
 	}
 	return out
+}
+
+func normalizeQdrantHost(host string) string {
+	host = strings.TrimSpace(host)
+	host = strings.TrimPrefix(host, "https://")
+	host = strings.TrimPrefix(host, "http://")
+	if i := strings.Index(host, "/"); i >= 0 {
+		host = host[:i]
+	}
+	return host
 }
