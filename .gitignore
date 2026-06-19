@@ -3,3 +3,4 @@ qdrant_storage/
 mongo_storage/
 .env
 tmp/
+redis_storage/
