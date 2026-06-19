@@ -7,6 +7,7 @@ import (
 
 	"github.com/mhseptiadi/islamic-article-rag/internal/config"
 	"github.com/mhseptiadi/islamic-article-rag/internal/handler"
+	"github.com/mhseptiadi/islamic-article-rag/internal/repository/mongo"
 	"github.com/mhseptiadi/islamic-article-rag/internal/repository/qdrant"
 	"github.com/mhseptiadi/islamic-article-rag/internal/service"
 )
@@ -26,13 +27,23 @@ func main() {
 	}
 	defer vectors.Close()
 
-	articles, err := qdrant.NewArticleRepository(cfg.QdrantHost, cfg.QdrantGRPCPort, cfg.QdrantArticleCollection)
+	articles, err := mongo.NewArticleRepository(cfg.MongoURI, cfg.MongoDatabase, cfg.MongoArticlesCollection)
 	if err != nil {
-		log.Fatalf("connect to qdrant articles: %v", err)
+		log.Fatalf("connect to mongodb articles: %v", err)
 	}
 	defer articles.Close()
 
-	orchestrator := service.NewQnAOrchestrator(embedder, llm, vectors, articles, cfg.QnARetrievalLimit, cfg.QnAContextSource)
+	qnaRecords, err := mongo.NewQnARepository(cfg.MongoURI, cfg.MongoDatabase, cfg.MongoQnACollection)
+	if err != nil {
+		log.Fatalf("connect to mongodb qna records: %v", err)
+	}
+	defer qnaRecords.Close()
+
+	orchestrator := service.NewQnAOrchestrator(
+		embedder, llm, vectors, articles, qnaRecords,
+		cfg.QnARetrievalLimit, cfg.QnAContextSource,
+		cfg.LLMProvider, cfg.LLMModel,
+	)
 	qnaHandler := handler.NewQnAHandler(orchestrator)
 
 	mux := http.NewServeMux()

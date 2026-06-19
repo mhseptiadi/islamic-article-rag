@@ -1,4 +1,5 @@
 data/**/*.md
 qdrant_storage/
+mongo_storage/
 .env
 tmp/

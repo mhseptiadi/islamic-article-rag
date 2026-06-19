@@ -1,4 +1,6 @@
 #!/bin/sh
+# Bootstraps Qdrant chunk collections (hybrid dense + sparse vectors).
+# Full article text is stored in MongoDB; do not use this script for articles.
 set -eu
 
 QDRANT_URL="${QDRANT_URL:-http://qdrant:6333}"
