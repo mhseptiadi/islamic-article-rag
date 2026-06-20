@@ -6,7 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
+
+	// "strconv"
 	"strings"
 	"unicode"
 
@@ -73,13 +74,6 @@ func (s *IngestionService) IngestDirectory(ctx context.Context, rawDir string, w
 		}
 
 		articleID := uuid.New().String()
-		if err := s.articles.InsertArticle(ctx, model.Article{
-			ID:   articleID,
-			Text: content,
-			URL:  sourceURL,
-		}); err != nil {
-			return 0, fmt.Errorf("insert article %s: %w", entry.Name(), err)
-		}
 
 		chunks, err := s.chunkFile(ctx, content, sourceURL, articleID, windowSize, stepSize)
 		if err != nil {
@@ -93,80 +87,88 @@ func (s *IngestionService) IngestDirectory(ctx context.Context, rawDir string, w
 			totalChunks += len(chunks)
 		}
 
+		if err := s.articles.InsertArticle(ctx, model.Article{
+			ID:   articleID,
+			Text: content,
+			URL:  sourceURL,
+		}); err != nil {
+			return 0, fmt.Errorf("insert article %s: %w", entry.Name(), err)
+		}
+
 		fmt.Printf("Processed file: %s (%d chunks)\n", entry.Name(), len(chunks))
 	}
 
 	return totalChunks, nil
 }
 
-func (s *IngestionService) IngestArticle(ctx context.Context, articleID, title, body, sourceURL string) error {
-	existing, err := s.articles.GetByURL(ctx, sourceURL)
-	if err != nil {
-		return err
-	}
-	if existing != nil {
-		return nil
-	}
+// func (s *IngestionService) IngestArticle(ctx context.Context, articleID, title, body, sourceURL string) error {
+// 	existing, err := s.articles.GetByURL(ctx, sourceURL)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	if existing != nil {
+// 		return nil
+// 	}
 
-	fullText := body
-	if title != "" {
-		fullText = title + "\n\n" + body
-	}
+// 	fullText := body
+// 	if title != "" {
+// 		fullText = title + "\n\n" + body
+// 	}
 
-	if err := s.articles.InsertArticle(ctx, model.Article{
-		ID:   articleID,
-		Text: fullText,
-		URL:  sourceURL,
-	}); err != nil {
-		return err
-	}
+// 	if err := s.articles.InsertArticle(ctx, model.Article{
+// 		ID:   articleID,
+// 		Text: fullText,
+// 		URL:  sourceURL,
+// 	}); err != nil {
+// 		return err
+// 	}
 
-	paragraphs := splitParagraphs(body)
-	chunks := make([]model.Chunk, 0, len(paragraphs))
+// 	paragraphs := splitParagraphs(body)
+// 	chunks := make([]model.Chunk, 0, len(paragraphs))
 
-	for i, paragraph := range paragraphs {
-		paragraph = removeArabicText(paragraph)
-		if !isEmbeddableChunk(paragraph) {
-			continue
-		}
+// 	for i, paragraph := range paragraphs {
+// 		paragraph = removeArabicText(paragraph)
+// 		if !isEmbeddableChunk(paragraph) {
+// 			continue
+// 		}
 
-		refs := regexutil.ExtractQuranReferences(paragraph)
-		refStrings := make([]string, len(refs))
-		for j, ref := range refs {
-			refStrings[j] = ref.Raw
-		}
+// 		refs := regexutil.ExtractQuranReferences(paragraph)
+// 		refStrings := make([]string, len(refs))
+// 		for j, ref := range refs {
+// 			refStrings[j] = ref.Raw
+// 		}
 
-		subChunks := splitByMaxChars(paragraph, s.maxChunkChars)
-		for j, subText := range subChunks {
-			embeddings, err := s.embedder.Embed(ctx, []string{subText})
-			if err != nil {
-				return err
-			}
+// 		subChunks := splitByMaxChars(paragraph, s.maxChunkChars)
+// 		for j, subText := range subChunks {
+// 			embeddings, err := s.embedder.Embed(ctx, []string{subText})
+// 			if err != nil {
+// 				return err
+// 			}
 
-			chunkID := articleID + "-" + strconv.Itoa(i)
-			if len(subChunks) > 1 {
-				chunkID += "-" + strconv.Itoa(j)
-			}
+// 			chunkID := articleID + "-" + strconv.Itoa(i)
+// 			if len(subChunks) > 1 {
+// 				chunkID += "-" + strconv.Itoa(j)
+// 			}
 
-			chunks = append(chunks, model.Chunk{
-				ID:          chunkID,
-				DenseVector: embeddings[0],
-				Payload: model.Payload{
-					Text: subText,
-					Metadata: model.Metadata{
-						ArticleID:    articleID,
-						Title:        title,
-						SourceURL:    sourceURL,
-						QuranRefs:    refStrings,
-						ParagraphIdx: i,
-					},
-				},
-			})
-		}
-	}
+// 			chunks = append(chunks, model.Chunk{
+// 				ID:          chunkID,
+// 				DenseVector: embeddings[0],
+// 				Payload: model.Payload{
+// 					Text: subText,
+// 					Metadata: model.Metadata{
+// 						ArticleID:    articleID,
+// 						Title:        title,
+// 						SourceURL:    sourceURL,
+// 						QuranRefs:    refStrings,
+// 						ParagraphIdx: i,
+// 					},
+// 				},
+// 			})
+// 		}
+// 	}
 
-	return s.vectors.InsertChunks(ctx, chunks)
-}
+// 	return s.vectors.InsertChunks(ctx, chunks)
+// }
 
 func (s *IngestionService) chunkFile(ctx context.Context, content, sourceURL, articleID string, windowSize, stepSize int) ([]model.Chunk, error) {
 	paragraphs := strings.Split(content, "\n")
