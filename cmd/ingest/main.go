@@ -44,8 +44,8 @@ func main() {
 	}
 
 	if count > 0 {
-		fmt.Printf("\nSuccess: Ingested %d total chunks.\n", count)
+		fmt.Printf("\nDone: Ingested %d total chunks.\n", count)
 	} else {
-		fmt.Println("No chunks were generated. Make sure your data directory contains .md files.")
+		fmt.Println("No chunks were generated. Check data/raw_articles, data/done, or data/errors for file status.")
 	}
 }
