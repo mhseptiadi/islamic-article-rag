@@ -22,6 +22,7 @@ type Config struct {
 	MongoDatabase           string
 	MongoArticlesCollection string
 	MongoQnACollection      string
+	EmbeddingProvider       string
 	EmbeddingAPIKey         string
 	LLMProvider             string
 	LLMAPIKey               string
@@ -52,6 +53,7 @@ func Load() (*Config, error) {
 	}
 
 	provider := getEnv("LLM_PROVIDER", "ollama", fileEnv)
+	embeddingProvider := getEnv("EMBEDDING_PROVIDER", "ollama", fileEnv)
 
 	return &Config{
 		HTTPPort: getEnv("HTTP_PORT", "8080", fileEnv),
@@ -65,6 +67,7 @@ func Load() (*Config, error) {
 		MongoDatabase:           getEnv("MONGO_DATABASE", "islamic_article_rag", fileEnv),
 		MongoArticlesCollection: getEnv("MONGO_ARTICLES_COLLECTION", "articles", fileEnv),
 		MongoQnACollection:      getEnv("MONGO_QNA_COLLECTION", "qna_records", fileEnv),
+		EmbeddingProvider:       embeddingProvider,
 		EmbeddingAPIKey:         getEnv("EMBEDDING_API_KEY", "", fileEnv),
 		LLMProvider:             provider,
 		LLMAPIKey:               getEnv("LLM_API_KEY", "", fileEnv),
