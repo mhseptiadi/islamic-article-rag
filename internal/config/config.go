@@ -44,6 +44,8 @@ type Config struct {
 	MaxRequestPerMinute   int
 	MaxRequestPerDay      int
 	MaxQuestionChars      int
+
+	IslamicTextValidatorURL string
 }
 
 func Load() (*Config, error) {
@@ -87,6 +89,7 @@ func Load() (*Config, error) {
 		MaxRequestPerMinute:     getEnvInt("MAX_REQUESTS_PER_MINUTE", 30, fileEnv),
 		MaxRequestPerDay:        getEnvInt("MAX_REQUESTS_PER_DAY", 1000, fileEnv),
 		MaxQuestionChars:        getEnvInt("MAX_QUESTION_CHARS", 200, fileEnv),
+		IslamicTextValidatorURL: getEnv("ISLAMIC_TEXT_VALIDATOR_URL", "localhost:8080/replace-tagged", fileEnv),
 	}, nil
 }
 

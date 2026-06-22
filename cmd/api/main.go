@@ -23,6 +23,7 @@ func main() {
 
 	embedder := service.NewEmbeddingClient(cfg.EmbeddingProvider, cfg.EmbeddingAPIKey, cfg.EmbeddingURL, cfg.EmbeddingModel)
 	llm := service.NewLLMClient(cfg.LLMProvider, cfg.LLMAPIKey, cfg.LLMApiURL, cfg.LLMModel)
+	textValidator := service.NewIslamicTextValidatorClient(cfg.IslamicTextValidatorURL)
 
 	vectors, err := qdrant.NewVectorRepository(cfg.QdrantHost, cfg.QdrantAPIKey, cfg.QdrantGRPCPort, cfg.QdrantCollection, cfg.MinSimilarityScore)
 	if err != nil {
@@ -49,7 +50,7 @@ func main() {
 	defer rateLimiter.Close()
 
 	orchestrator := service.NewQnAOrchestrator(
-		embedder, llm, vectors, articles, qnaRecords,
+		embedder, llm, textValidator, vectors, articles, qnaRecords,
 		cfg.QnARetrievalLimit, cfg.QnAContextSource,
 		cfg.LLMProvider, cfg.LLMModel,
 	)

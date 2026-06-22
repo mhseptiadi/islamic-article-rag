@@ -20,6 +20,7 @@ const (
 type QnAOrchestrator struct {
 	embedder       *EmbeddingClient
 	llm            *LLMClient
+	textValidator  *IslamicTextValidatorClient
 	vectors        *qdrant.VectorRepository
 	articles       *mongo.ArticleRepository
 	qnaRecords     *mongo.QnARepository
@@ -32,6 +33,7 @@ type QnAOrchestrator struct {
 func NewQnAOrchestrator(
 	embedder *EmbeddingClient,
 	llm *LLMClient,
+	textValidator *IslamicTextValidatorClient,
 	vectors *qdrant.VectorRepository,
 	articles *mongo.ArticleRepository,
 	qnaRecords *mongo.QnARepository,
@@ -43,6 +45,7 @@ func NewQnAOrchestrator(
 	return &QnAOrchestrator{
 		embedder:       embedder,
 		llm:            llm,
+		textValidator:  textValidator,
 		vectors:        vectors,
 		articles:       articles,
 		qnaRecords:     qnaRecords,
@@ -54,9 +57,10 @@ func NewQnAOrchestrator(
 }
 
 type AskResult struct {
-	Answer       string          `json:"answer"`
-	FullArticles []model.Article `json:"full_articles"`
-	Chunks       []model.Chunk   `json:"chunks"`
+	Answer                        string                         `json:"answer"`
+	IslamicTextValidationResponse *IslamicTextValidationResponse `json:"islamicTextValidationResponse"`
+	FullArticles                  []model.Article                `json:"full_articles"`
+	Chunks                        []model.Chunk                  `json:"chunks"`
 }
 
 func (o *QnAOrchestrator) Ask(ctx context.Context, question string) (*AskResult, error) {
@@ -101,10 +105,21 @@ func (o *QnAOrchestrator) Ask(ctx context.Context, question string) (*AskResult,
 		return nil, err
 	}
 
+	validation, err := o.textValidator.Validate(ctx, answer)
+	var validatedAnswer string
+	if err != nil {
+		validatedAnswer = ReplaceIslamicTagsOnValidationError(answer)
+	} else {
+		validatedAnswer = validation.ReplacedText
+		if validatedAnswer == "" {
+			validatedAnswer = answer
+		}
+	}
+
 	if err := o.qnaRecords.Insert(ctx, model.QnARecord{
 		ID:            uuid.New().String(),
 		Question:      question,
-		Answer:        answer,
+		Answer:        validatedAnswer,
 		LLMProvider:   o.llmProvider,
 		LLMModel:      o.llmModel,
 		ContextSource: o.contextSource,
@@ -116,9 +131,10 @@ func (o *QnAOrchestrator) Ask(ctx context.Context, question string) (*AskResult,
 	}
 
 	return &AskResult{
-		Answer:       answer,
-		FullArticles: fullArticles,
-		Chunks:       chunks,
+		Answer:                        validatedAnswer,
+		IslamicTextValidationResponse: validation,
+		FullArticles:                  fullArticles,
+		Chunks:                        chunks,
 	}, nil
 }
 
