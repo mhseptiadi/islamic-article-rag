@@ -54,7 +54,7 @@ func main() {
 		cfg.QnARetrievalLimit, cfg.QnAContextSource,
 		cfg.LLMProvider, cfg.LLMModel,
 	)
-	qnaHandler := handler.NewQnAHandler(orchestrator)
+	qnaHandler := handler.NewQnAHandler(orchestrator, cfg.MaxQuestionChars)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/ask", ipRateLimit(rateLimiter, qnaHandler.Ask))

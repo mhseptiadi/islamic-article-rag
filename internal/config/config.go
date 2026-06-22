@@ -29,21 +29,21 @@ type Config struct {
 	LLMApiURL               string
 	LLMModel                string
 
-	RawArticlesDir       string
-	ChunkWindowSize      int
-	ChunkStepSize        int
-	MaxChunkChars        int
-	EmbeddingURL   string
-	EmbeddingModel string
-	MinSimilarityScore   float64
-	QnARetrievalLimit    int
-	QnAContextSource     string
+	RawArticlesDir     string
+	ChunkWindowSize    int
+	ChunkStepSize      int
+	MaxChunkChars      int
+	EmbeddingURL       string
+	EmbeddingModel     string
+	MinSimilarityScore float64
+	QnARetrievalLimit  int
+	QnAContextSource   string
 
 	RedisURL              string
 	MaxIPRequestPerMinute int
 	MaxRequestPerMinute   int
-	MaxRequestPerDay      int
-	MaxQuestionChars      int
+	// MaxRequestPerDay      int
+	MaxQuestionChars int
 
 	IslamicTextValidatorURL string
 }
@@ -87,8 +87,8 @@ func Load() (*Config, error) {
 		RedisURL:                getEnv("REDIS_URL", "redis://localhost:6379", fileEnv),
 		MaxIPRequestPerMinute:   getEnvInt("MAX_IP_REQUESTS_PER_MINUTE", 5, fileEnv),
 		MaxRequestPerMinute:     getEnvInt("MAX_REQUESTS_PER_MINUTE", 30, fileEnv),
-		MaxRequestPerDay:        getEnvInt("MAX_REQUESTS_PER_DAY", 1000, fileEnv),
-		MaxQuestionChars:        getEnvInt("MAX_QUESTION_CHARS", 200, fileEnv),
+		// MaxRequestPerDay:        getEnvInt("MAX_REQUESTS_PER_DAY", 1000, fileEnv),
+		MaxQuestionChars:        getEnvInt("MAX_QUESTION_CHARS", 300, fileEnv),
 		IslamicTextValidatorURL: getEnv("ISLAMIC_TEXT_VALIDATOR_URL", "localhost:8080/replace-tagged", fileEnv),
 	}, nil
 }

@@ -2,17 +2,22 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/mhseptiadi/islamic-article-rag/internal/service"
 )
 
 type QnAHandler struct {
-	orchestrator *service.QnAOrchestrator
+	orchestrator      *service.QnAOrchestrator
+	maxQuestionChars int
 }
 
-func NewQnAHandler(orchestrator *service.QnAOrchestrator) *QnAHandler {
-	return &QnAHandler{orchestrator: orchestrator}
+func NewQnAHandler(orchestrator *service.QnAOrchestrator, maxQuestionChars int) *QnAHandler {
+	return &QnAHandler{
+		orchestrator:      orchestrator,
+		maxQuestionChars: maxQuestionChars,
+	}
 }
 
 type askRequest struct {
@@ -33,6 +38,11 @@ func (h *QnAHandler) Ask(w http.ResponseWriter, r *http.Request) {
 
 	if req.Question == "" {
 		http.Error(w, "question is required", http.StatusBadRequest)
+		return
+	}
+
+	if h.maxQuestionChars > 0 && len(req.Question) > h.maxQuestionChars {
+		http.Error(w, fmt.Sprintf("question exceeds maximum length of %d characters", h.maxQuestionChars), http.StatusBadRequest)
 		return
 	}
 

@@ -331,6 +331,11 @@ go build -o bin/api ./cmd/api
 go build -o bin/ingest ./cmd/ingest
 ```
 
+## Todo
+
+- Rate limit global max request per minute (RPM)
+- deployment
+
 ## License
 
 [MIT](LICENSE)
