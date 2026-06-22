@@ -241,8 +241,8 @@ Environment variables are loaded from `.env` (walked up from the working directo
 | `LLM_API_KEY`                |                                         | Required for `google` and `groq`                              |
 | `LLM_API_URL`                | Ollama generate URL                     | Provider-specific endpoint                                    |
 | `LLM_MODEL`                  | `qwen2.5:7b`                            | Model name                                                    |
-| `OLLAMA_EMBEDDING_URL`       | `http://localhost:11434/api/embeddings` | Embedding endpoint                                            |
-| `OLLAMA_EMBEDDING_MODEL`     | `bge-m3`                                | Embedding model (1024 dimensions)                             |
+| `EMBEDDING_URL`              | `http://localhost:11434/api/embeddings` | Embedding endpoint                                            |
+| `EMBEDDING_MODEL`            | `bge-m3`                                | Embedding model (1024 dimensions)                             |
 | `RAW_ARTICLES_DIR`           | `data/raw_articles`                     | Directory of `.md` files to ingest                            |
 | `CHUNK_WINDOW_SIZE`          | `3`                                     | Paragraphs per chunk window                                   |
 | `CHUNK_STEP_SIZE`            | `2`                                     | Paragraph step between windows                                |

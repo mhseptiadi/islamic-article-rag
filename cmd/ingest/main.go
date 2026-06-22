@@ -17,7 +17,7 @@ func main() {
 		log.Fatalf("load config: %v", err)
 	}
 
-	embedder := service.NewEmbeddingClient(cfg.EmbeddingAPIKey, cfg.OllamaEmbeddingURL, cfg.OllamaEmbeddingModel)
+	embedder := service.NewEmbeddingClient(cfg.EmbeddingAPIKey, cfg.EmbeddingURL, cfg.EmbeddingModel)
 
 	vectors, err := qdrant.NewVectorRepository(cfg.QdrantHost, cfg.QdrantAPIKey, cfg.QdrantGRPCPort, cfg.QdrantCollection, cfg.MinSimilarityScore)
 	if err != nil {

@@ -11,17 +11,17 @@ import (
 )
 
 type EmbeddingClient struct {
-	apiKey      string
-	ollamaURL   string
-	ollamaModel string
+	apiKey         string
+	embeddingURL   string
+	embeddingModel string
 	httpClient  *http.Client
 }
 
-func NewEmbeddingClient(apiKey, ollamaURL, ollamaModel string) *EmbeddingClient {
+func NewEmbeddingClient(apiKey, embeddingURL, embeddingModel string) *EmbeddingClient {
 	return &EmbeddingClient{
-		apiKey:      apiKey,
-		ollamaURL:   ollamaURL,
-		ollamaModel: ollamaModel,
+		apiKey:         apiKey,
+		embeddingURL:   embeddingURL,
+		embeddingModel: embeddingModel,
 		httpClient:  http.DefaultClient,
 	}
 }
@@ -40,7 +40,7 @@ func (c *EmbeddingClient) Embed(ctx context.Context, texts []string) ([][]float3
 
 func (c *EmbeddingClient) embedOne(ctx context.Context, text string) ([]float32, error) {
 	payload := map[string]string{
-		"model":  c.ollamaModel,
+		"model":  c.embeddingModel,
 		"prompt": text,
 	}
 	jsonData, err := json.Marshal(payload)
@@ -48,7 +48,7 @@ func (c *EmbeddingClient) embedOne(ctx context.Context, text string) ([]float32,
 		return nil, fmt.Errorf("marshal embedding request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.ollamaURL, bytes.NewReader(jsonData))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.embeddingURL, bytes.NewReader(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("create embedding request: %w", err)
 	}

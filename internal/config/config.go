@@ -32,8 +32,8 @@ type Config struct {
 	ChunkWindowSize      int
 	ChunkStepSize        int
 	MaxChunkChars        int
-	OllamaEmbeddingURL   string
-	OllamaEmbeddingModel string
+	EmbeddingURL   string
+	EmbeddingModel string
 	MinSimilarityScore   float64
 	QnARetrievalLimit    int
 	QnAContextSource     string
@@ -74,8 +74,8 @@ func Load() (*Config, error) {
 		ChunkWindowSize:         getEnvInt("CHUNK_WINDOW_SIZE", 3, fileEnv),
 		ChunkStepSize:           getEnvInt("CHUNK_STEP_SIZE", 2, fileEnv),
 		MaxChunkChars:           getEnvInt("MAX_CHUNK_CHARS", 6000, fileEnv),
-		OllamaEmbeddingURL:      getEnv("OLLAMA_EMBEDDING_URL", "http://localhost:11434/api/embeddings", fileEnv),
-		OllamaEmbeddingModel:    getEnv("OLLAMA_EMBEDDING_MODEL", "bge-m3", fileEnv),
+		EmbeddingURL:            getEnv("EMBEDDING_URL", "http://localhost:11434/api/embeddings", fileEnv),
+		EmbeddingModel:          getEnv("EMBEDDING_MODEL", "bge-m3", fileEnv),
 		MinSimilarityScore:      getEnvFloat("MIN_SIMILARITY_SCORE", 0.40, fileEnv),
 		QnARetrievalLimit:       getEnvInt("QNA_RETRIEVAL_LIMIT", 5, fileEnv),
 		QnAContextSource:        getEnv("QNA_CONTEXT_SOURCE", "chunks", fileEnv),
