@@ -45,7 +45,18 @@ func (s *IngestionService) IngestDirectory(ctx context.Context, rawDir string, w
 		return 0, fmt.Errorf("read directory %s: %w", rawDir, err)
 	}
 
+	errorsDir := filepath.Join(filepath.Dir(rawDir), "errors")
+	doneDir := filepath.Join(filepath.Dir(rawDir), "done")
+	if err := os.MkdirAll(errorsDir, 0o755); err != nil {
+		return 0, fmt.Errorf("create errors directory %s: %w", errorsDir, err)
+	}
+	if err := os.MkdirAll(doneDir, 0o755); err != nil {
+		return 0, fmt.Errorf("create done directory %s: %w", doneDir, err)
+	}
+
 	totalChunks := 0
+	failedFiles := 0
+	doneFiles := 0
 
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
@@ -55,7 +66,12 @@ func (s *IngestionService) IngestDirectory(ctx context.Context, rawDir string, w
 		fullPath := filepath.Join(rawDir, entry.Name())
 		contentBytes, err := os.ReadFile(fullPath)
 		if err != nil {
-			return 0, fmt.Errorf("read file %s: %w", fullPath, err)
+			failedFiles++
+			fmt.Printf("Failed file %s: read: %v\n", entry.Name(), err)
+			if moveErr := moveIngestionFile(fullPath, errorsDir); moveErr != nil {
+				fmt.Printf("Failed to move %s to errors: %v\n", entry.Name(), moveErr)
+			}
+			continue
 		}
 
 		content := string(contentBytes)
@@ -66,10 +82,19 @@ func (s *IngestionService) IngestDirectory(ctx context.Context, rawDir string, w
 
 		existing, err := s.articles.GetByURL(ctx, sourceURL)
 		if err != nil {
-			return 0, fmt.Errorf("check article %s: %w", entry.Name(), err)
+			failedFiles++
+			fmt.Printf("Failed file %s: check article: %v\n", entry.Name(), err)
+			if moveErr := moveIngestionFile(fullPath, errorsDir); moveErr != nil {
+				fmt.Printf("Failed to move %s to errors: %v\n", entry.Name(), moveErr)
+			}
+			continue
 		}
 		if existing != nil {
 			fmt.Printf("Skipped file (duplicate URL): %s\n", entry.Name())
+			doneFiles++
+			if moveErr := moveIngestionFile(fullPath, doneDir); moveErr != nil {
+				fmt.Printf("Failed to move %s to done: %v\n", entry.Name(), moveErr)
+			}
 			continue
 		}
 
@@ -77,12 +102,22 @@ func (s *IngestionService) IngestDirectory(ctx context.Context, rawDir string, w
 
 		chunks, err := s.chunkFile(ctx, content, sourceURL, articleID, windowSize, stepSize)
 		if err != nil {
-			return 0, fmt.Errorf("process file %s: %w", entry.Name(), err)
+			failedFiles++
+			fmt.Printf("Failed file %s: process file: %v\n", entry.Name(), err)
+			if moveErr := moveIngestionFile(fullPath, errorsDir); moveErr != nil {
+				fmt.Printf("Failed to move %s to errors: %v\n", entry.Name(), moveErr)
+			}
+			continue
 		}
 
 		if len(chunks) > 0 {
 			if err := s.vectors.InsertChunks(ctx, chunks); err != nil {
-				return totalChunks, fmt.Errorf("insert chunks for %s: %w", entry.Name(), err)
+				failedFiles++
+				fmt.Printf("Failed file %s: insert chunks: %v\n", entry.Name(), err)
+				if moveErr := moveIngestionFile(fullPath, errorsDir); moveErr != nil {
+					fmt.Printf("Failed to move %s to errors: %v\n", entry.Name(), moveErr)
+				}
+				continue
 			}
 			totalChunks += len(chunks)
 		}
@@ -92,13 +127,39 @@ func (s *IngestionService) IngestDirectory(ctx context.Context, rawDir string, w
 			Text: content,
 			URL:  sourceURL,
 		}); err != nil {
-			return 0, fmt.Errorf("insert article %s: %w", entry.Name(), err)
+			failedFiles++
+			fmt.Printf("Failed file %s: insert article: %v\n", entry.Name(), err)
+			if moveErr := moveIngestionFile(fullPath, errorsDir); moveErr != nil {
+				fmt.Printf("Failed to move %s to errors: %v\n", entry.Name(), moveErr)
+			}
+			continue
 		}
 
 		fmt.Printf("Processed file: %s (%d chunks)\n", entry.Name(), len(chunks))
+		doneFiles++
+		if moveErr := moveIngestionFile(fullPath, doneDir); moveErr != nil {
+			fmt.Printf("Failed to move %s to done: %v\n", entry.Name(), moveErr)
+		}
+	}
+
+	if doneFiles > 0 {
+		fmt.Printf("\nMoved %d completed file(s) to %s\n", doneFiles, doneDir)
+	}
+	if failedFiles > 0 {
+		fmt.Printf("\nMoved %d failed file(s) to %s\n", failedFiles, errorsDir)
 	}
 
 	return totalChunks, nil
+}
+
+func moveIngestionFile(srcPath, destDir string) error {
+	destPath := filepath.Join(destDir, filepath.Base(srcPath))
+	if _, err := os.Stat(destPath); err == nil {
+		ext := filepath.Ext(destPath)
+		base := strings.TrimSuffix(filepath.Base(destPath), ext)
+		destPath = filepath.Join(destDir, fmt.Sprintf("%s-%s%s", base, uuid.New().String()[:8], ext))
+	}
+	return os.Rename(srcPath, destPath)
 }
 
 // func (s *IngestionService) IngestArticle(ctx context.Context, articleID, title, body, sourceURL string) error {
