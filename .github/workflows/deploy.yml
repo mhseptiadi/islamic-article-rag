@@ -7,7 +7,7 @@ env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: ${{ secrets.GCP_REGION }}
   SERVICE_NAME: islamic-article-rag
-  IMAGE: asia-southeast2-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/islamic-article-rag
+  IMAGE: asia-southeast2-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/islamic-article-rag/api
 
 jobs:
   build-and-deploy:
