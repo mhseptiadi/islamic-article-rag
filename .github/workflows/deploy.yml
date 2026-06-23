@@ -1,0 +1,150 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: ${{ secrets.GCP_REGION }}
+  SERVICE_NAME: islamic-article-rag
+  IMAGE: asia-southeast2-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/islamic-article-rag
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker asia-southeast2-docker.pkg.dev --quiet
+
+      - name: Build and push image
+        run: |
+          docker build -t "$IMAGE:${{ github.sha }}" -t "$IMAGE:latest" .
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+
+      - name: Deploy to Cloud Run
+        env:
+          # --- HTTP API ---
+          HTTP_PORT: ${{ vars.HTTP_PORT || '8080' }}
+
+          # --- Qdrant ---
+          QDRANT_HOST: ${{ vars.QDRANT_HOST }}
+          QDRANT_GRPC_PORT: ${{ vars.QDRANT_GRPC_PORT || '6334' }}
+          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+          QDRANT_COLLECTION: ${{ vars.QDRANT_COLLECTION || 'indonesian_articles' }}
+          QDRANT_ARTICLE_COLLECTION: ${{ vars.QDRANT_ARTICLE_COLLECTION || 'indonesian_articles_full' }}
+
+          # --- MongoDB ---
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          MONGO_DATABASE: ${{ vars.MONGO_DATABASE || 'islamic_article_rag' }}
+          MONGO_ARTICLES_COLLECTION: ${{ vars.MONGO_ARTICLES_COLLECTION || 'articles' }}
+          MONGO_QNA_COLLECTION: ${{ vars.MONGO_QNA_COLLECTION || 'qna_records' }}
+
+          # --- LLM ---
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'groq' }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_API_URL: ${{ vars.LLM_API_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+
+          # --- Redis ---
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+
+          # --- Embeddings ---
+          EMBEDDING_PROVIDER: ${{ vars.EMBEDDING_PROVIDER || 'ollama' }}
+          EMBEDDING_API_KEY: ${{ secrets.EMBEDDING_API_KEY }}
+          EMBEDDING_URL: ${{ vars.EMBEDDING_URL }}
+          EMBEDDING_MODEL: ${{ vars.EMBEDDING_MODEL || 'bge-m3' }}
+
+          # --- Ingestion ---
+          RAW_ARTICLES_DIR: ${{ vars.RAW_ARTICLES_DIR || 'data/raw_articles' }}
+          CHUNK_WINDOW_SIZE: ${{ vars.CHUNK_WINDOW_SIZE || '3' }}
+          CHUNK_STEP_SIZE: ${{ vars.CHUNK_STEP_SIZE || '2' }}
+          MAX_CHUNK_CHARS: ${{ vars.MAX_CHUNK_CHARS || '6000' }}
+
+          # --- Retrieval / QnA ---
+          MIN_SIMILARITY_SCORE: ${{ vars.MIN_SIMILARITY_SCORE || '0.40' }}
+          QNA_RETRIEVAL_LIMIT: ${{ vars.QNA_RETRIEVAL_LIMIT || '5' }}
+          QNA_CONTEXT_SOURCE: ${{ vars.QNA_CONTEXT_SOURCE || 'chunks' }}
+
+          # --- Rate limits ---
+          MAX_IP_REQUESTS_PER_MINUTE: ${{ vars.MAX_IP_REQUESTS_PER_MINUTE || '5' }}
+          MAX_REQUESTS_PER_MINUTE: ${{ vars.MAX_REQUESTS_PER_MINUTE || '30' }}
+          MAX_QUESTION_CHARS: ${{ vars.MAX_QUESTION_CHARS || '300' }}
+
+          # --- External services ---
+          ISLAMIC_TEXT_VALIDATOR_URL: ${{ vars.ISLAMIC_TEXT_VALIDATOR_URL }}
+
+        run: |
+          python3 <<'PY'
+          import os
+
+          def yaml_value(value: str) -> str:
+              if not value:
+                  return '""'
+              if any(c in value for c in ':#",{}[]\n\t'):
+                  escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+                  return f'"{escaped}"'
+              return value
+
+          keys = [
+              "HTTP_PORT",
+              "QDRANT_HOST",
+              "QDRANT_GRPC_PORT",
+              "QDRANT_API_KEY",
+              "QDRANT_COLLECTION",
+              "QDRANT_ARTICLE_COLLECTION",
+              "MONGO_URI",
+              "MONGO_DATABASE",
+              "MONGO_ARTICLES_COLLECTION",
+              "MONGO_QNA_COLLECTION",
+              "LLM_PROVIDER",
+              "LLM_API_KEY",
+              "LLM_API_URL",
+              "LLM_MODEL",
+              "REDIS_URL",
+              "EMBEDDING_PROVIDER",
+              "EMBEDDING_API_KEY",
+              "EMBEDDING_URL",
+              "EMBEDDING_MODEL",
+              "RAW_ARTICLES_DIR",
+              "CHUNK_WINDOW_SIZE",
+              "CHUNK_STEP_SIZE",
+              "MAX_CHUNK_CHARS",
+              "MIN_SIMILARITY_SCORE",
+              "QNA_RETRIEVAL_LIMIT",
+              "QNA_CONTEXT_SOURCE",
+              "MAX_IP_REQUESTS_PER_MINUTE",
+              "MAX_REQUESTS_PER_MINUTE",
+              "MAX_QUESTION_CHARS",
+              "ISLAMIC_TEXT_VALIDATOR_URL",
+          ]
+
+          with open("env.yaml", "w", encoding="utf-8") as f:
+              for key in keys:
+                  value = os.environ.get(key, "")
+                  if value:
+                      f.write(f"{key}: {yaml_value(value)}\n")
+
+          print(f"Wrote {sum(1 for k in keys if os.environ.get(k))} environment variables")
+          PY
+
+          gcloud run deploy "$SERVICE_NAME" \
+            --image "$IMAGE:${{ github.sha }}" \
+            --region "$REGION" \
+            --platform managed \
+            --allow-unauthenticated \
+            --port 8080 \
+            --env-vars-file env.yaml
