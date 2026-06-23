@@ -92,12 +92,8 @@ jobs:
           import os
 
           def yaml_value(value: str) -> str:
-              if not value:
-                  return '""'
-              if any(c in value for c in ':#",{}[]\n\t'):
-                  escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-                  return f'"{escaped}"'
-              return value
+              escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+              return f'"{escaped}"'
 
           keys = [
               "HTTP_PORT",
