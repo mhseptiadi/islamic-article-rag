@@ -19,11 +19,11 @@ func (c *LLMClient) generateGroq(ctx context.Context, question string, contextBl
 	payload := map[string]any{
 		"messages":              buildRAGMessages(question, contextBlocks),
 		"model":                 c.model,
-		"temperature":           1,
-		"max_completion_tokens": 1192,
-		"top_p":                 1,
-		"stream":                true,
-		"reasoning_effort":      "medium",
+		"temperature":           c.temperature,
+		"max_completion_tokens": c.maxCompletionTokens,
+		"top_p":                 c.topP,
+		"stream":                c.stream,
+		"reasoning_effort":      c.reasoningEffort,
 	}
 	jsonData, err := json.Marshal(payload)
 	if err != nil {

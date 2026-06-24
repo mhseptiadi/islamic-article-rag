@@ -1,7 +1,9 @@
 package main
 
 import (
+	"embed"
 	"fmt"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -15,6 +17,9 @@ import (
 	"github.com/mhseptiadi/islamic-article-rag/internal/service"
 )
 
+//go:embed web/*
+var webFS embed.FS
+
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
@@ -22,7 +27,7 @@ func main() {
 	}
 
 	embedder := service.NewEmbeddingClient(cfg.EmbeddingProvider, cfg.EmbeddingAPIKey, cfg.EmbeddingURL, cfg.EmbeddingModel)
-	llm := service.NewLLMClient(cfg.LLMProvider, cfg.LLMAPIKey, cfg.LLMApiURL, cfg.LLMModel)
+	llm := service.NewLLMClient(cfg.LLMProvider, cfg.LLMAPIKey, cfg.LLMApiURL, cfg.LLMModel, cfg.LLMTemperature, cfg.LLMMaxCompletionTokens, cfg.LLMTopP, cfg.LLMStream, cfg.LLMReasoningEffort)
 	textValidator := service.NewIslamicTextValidatorClient(cfg.IslamicTextValidatorURL)
 
 	vectors, err := qdrant.NewVectorRepository(cfg.QdrantHost, cfg.QdrantAPIKey, cfg.QdrantGRPCPort, cfg.QdrantCollection, cfg.MinSimilarityScore)
@@ -58,6 +63,8 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/ask", ipRateLimit(rateLimiter, qnaHandler.Ask))
+	mux.HandleFunc("POST /api/v1/feedback", qnaHandler.Feedback)
+	registerWebRoutes(mux)
 
 	addr := fmt.Sprintf(":%s", cfg.HTTPPort)
 	log.Printf("starting API server on %s", addr)
@@ -95,4 +102,16 @@ func clientIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+func registerWebRoutes(mux *http.ServeMux) {
+	webRoot, err := fs.Sub(webFS, "web")
+	if err != nil {
+		log.Fatalf("load web assets: %v", err)
+	}
+
+	fileServer := http.FileServer(http.FS(webRoot))
+	mux.Handle("GET /{$}", fileServer)
+	mux.Handle("GET /css/", fileServer)
+	mux.Handle("GET /js/", fileServer)
 }

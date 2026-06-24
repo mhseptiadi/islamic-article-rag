@@ -24,10 +24,16 @@ type Config struct {
 	MongoQnACollection      string
 	EmbeddingProvider       string
 	EmbeddingAPIKey         string
-	LLMProvider             string
-	LLMAPIKey               string
-	LLMApiURL               string
-	LLMModel                string
+
+	LLMProvider            string
+	LLMAPIKey              string
+	LLMApiURL              string
+	LLMModel               string
+	LLMTemperature         float64
+	LLMMaxCompletionTokens int
+	LLMTopP                float64
+	LLMStream              bool
+	LLMReasoningEffort     string
 
 	RawArticlesDir     string
 	ChunkWindowSize    int
@@ -75,6 +81,11 @@ func Load() (*Config, error) {
 		LLMAPIKey:               getEnv("LLM_API_KEY", "", fileEnv),
 		LLMApiURL:               getEnv("LLM_API_URL", "http://localhost:11434/api/generate", fileEnv),
 		LLMModel:                getEnv("LLM_MODEL", "qwen2.5:7b", fileEnv),
+		LLMTemperature:          getEnvFloat("LLM_TEMPERATURE", 0.2, fileEnv),
+		LLMMaxCompletionTokens:  getEnvInt("LLM_MAX_COMPLETION_TOKENS", 1192, fileEnv),
+		LLMTopP:                 getEnvFloat("LLM_TOP_P", 1, fileEnv),
+		LLMStream:               getEnv("LLM_STREAM", "true", fileEnv) == "true",
+		LLMReasoningEffort:      getEnv("LLM_REASONING_EFFORT", "medium", fileEnv),
 		RawArticlesDir:          getEnv("RAW_ARTICLES_DIR", "data/raw_articles", fileEnv),
 		ChunkWindowSize:         getEnvInt("CHUNK_WINDOW_SIZE", 3, fileEnv),
 		ChunkStepSize:           getEnvInt("CHUNK_STEP_SIZE", 2, fileEnv),

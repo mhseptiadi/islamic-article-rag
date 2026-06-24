@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -57,11 +58,14 @@ func NewQnAOrchestrator(
 }
 
 type AskResult struct {
+	RecordID                      string                         `json:"record_id"`
 	Answer                        string                         `json:"answer"`
 	IslamicTextValidationResponse *IslamicTextValidationResponse `json:"islamicTextValidationResponse"`
 	FullArticles                  []model.Article                `json:"full_articles"`
 	Chunks                        []model.Chunk                  `json:"chunks"`
 }
+
+var ErrInvalidFeedbackType = errors.New("invalid feedback_type")
 
 func (o *QnAOrchestrator) Ask(ctx context.Context, question string) (*AskResult, error) {
 	embeddings, err := o.embedder.Embed(ctx, []string{question})
@@ -116,8 +120,9 @@ func (o *QnAOrchestrator) Ask(ctx context.Context, question string) (*AskResult,
 		}
 	}
 
+	recordID := uuid.New().String()
 	if err := o.qnaRecords.Insert(ctx, model.QnARecord{
-		ID:            uuid.New().String(),
+		ID:            recordID,
 		Question:      question,
 		Answer:        validatedAnswer,
 		LLMProvider:   o.llmProvider,
@@ -131,11 +136,22 @@ func (o *QnAOrchestrator) Ask(ctx context.Context, question string) (*AskResult,
 	}
 
 	return &AskResult{
+		RecordID:                      recordID,
 		Answer:                        validatedAnswer,
 		IslamicTextValidationResponse: validation,
 		FullArticles:                  fullArticles,
 		Chunks:                        chunks,
 	}, nil
+}
+
+func (o *QnAOrchestrator) SubmitFeedback(ctx context.Context, recordID string, feedbackType model.FeedbackType, comment string) error {
+	if recordID == "" {
+		return fmt.Errorf("record_id is required")
+	}
+	if !feedbackType.Valid() {
+		return ErrInvalidFeedbackType
+	}
+	return o.qnaRecords.UpdateFeedback(ctx, recordID, feedbackType, comment)
 }
 
 func (o *QnAOrchestrator) resolveFullArticles(ctx context.Context, chunks []model.Chunk) ([]model.Article, error) {

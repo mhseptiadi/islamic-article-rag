@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Islamic Article RAG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="page">
+    <header class="header">
+      <div class="header-inner">
+        <p class="eyebrow">Islamic Q&amp;A</p>
+        <h1>Islamic Article RAG</h1>
+        <p class="subtitle">Ask questions about Indonesian Islamic articles. Answers are generated from relevant sources.</p>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="card ask-card" aria-labelledby="ask-heading">
+        <h2 id="ask-heading" class="visually-hidden">Question form</h2>
+        <form id="ask-form" novalidate>
+          <label for="question" class="field-label">Your question</label>
+          <textarea
+            id="question"
+            name="question"
+            rows="4"
+            maxlength="300"
+            placeholder="Example: What is the ruling on fasting in Ramadan?"
+            required
+            autocomplete="off"
+          ></textarea>
+          <div class="form-footer">
+            <span id="char-count" class="char-count" aria-live="polite">0 / 300</span>
+            <button type="submit" id="submit-btn" class="submit-btn">
+              <span class="btn-label">Submit question</span>
+              <span class="btn-spinner" hidden aria-hidden="true"></span>
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section id="status" class="status" hidden role="status" aria-live="polite"></section>
+
+      <section id="answer-section" class="card answer-card" hidden>
+        <h2>Answer</h2>
+        <aside class="disclaimer" role="note">
+          <p><strong>⚠️ Notice:</strong> This answer is automatically summarized by Artificial Intelligence (AI) based on the NU Online article database. Although the system is designed for accuracy, AI may occasionally make mistakes, lose context, or hallucinate. This answer is not a fatwa and cannot replace the scholarly authority of ulama. Please always refer to the attached original source links and consult a trusted Kyai/Ustadz for binding legal decisions. Please help us by giving feedback (👍/👎) if you find any discrepancies.</p>
+        </aside>
+        <div id="answer" class="answer-body"></div>
+      </section>
+
+      <section id="feedback-section" class="card feedback-card" hidden aria-labelledby="feedback-heading">
+        <h2 id="feedback-heading">Feedback</h2>
+        <p class="feedback-intro">Help us improve answer quality by providing feedback.</p>
+        <form id="feedback-form" novalidate>
+          <fieldset class="feedback-options">
+            <legend class="visually-hidden">Feedback type</legend>
+            <div id="feedback-types" class="feedback-types"></div>
+          </fieldset>
+          <label for="feedback-comment" class="field-label">Additional comments (optional)</label>
+          <textarea
+            id="feedback-comment"
+            name="comment"
+            rows="3"
+            maxlength="1000"
+            placeholder="Explain further if needed..."
+            autocomplete="off"
+          ></textarea>
+          <div class="form-footer">
+            <span id="feedback-char-count" class="char-count" aria-live="polite">0 / 1000</span>
+            <button type="submit" id="feedback-submit-btn" class="submit-btn submit-btn-secondary">
+              <span class="btn-label">Submit feedback</span>
+              <span class="btn-spinner" hidden aria-hidden="true"></span>
+            </button>
+          </div>
+        </form>
+        <p id="feedback-success" class="feedback-success" hidden>Thank you, your feedback has been saved.</p>
+      </section>
+
+      <section id="sources-section" class="card sources-card" hidden>
+        <h2>Sources</h2>
+        <div id="sources" class="sources-list"></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>Powered by retrieval-augmented generation from Indonesian Islamic articles.</p>
+    </footer>
+  </div>
+
+  <script src="/js/app.js" type="module"></script>
+</body>
+</html>

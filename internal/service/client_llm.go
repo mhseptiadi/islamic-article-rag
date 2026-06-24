@@ -17,15 +17,26 @@ type LLMClient struct {
 	apiURL     string
 	model      string
 	httpClient *http.Client
+
+	temperature         float64
+	maxCompletionTokens int
+	topP                float64
+	stream              bool
+	reasoningEffort     string
 }
 
-func NewLLMClient(provider, apiKey, apiURL, model string) *LLMClient {
+func NewLLMClient(provider, apiKey, apiURL, model string, temperature float64, maxCompletionTokens int, topP float64, stream bool, reasoningEffort string) *LLMClient {
 	return &LLMClient{
-		provider:   provider,
-		apiKey:     apiKey,
-		apiURL:     apiURL,
-		model:      model,
-		httpClient: http.DefaultClient,
+		provider:            provider,
+		apiKey:              apiKey,
+		apiURL:              apiURL,
+		model:               model,
+		httpClient:          http.DefaultClient,
+		temperature:         temperature,
+		maxCompletionTokens: maxCompletionTokens,
+		topP:                topP,
+		stream:              stream,
+		reasoningEffort:     reasoningEffort,
 	}
 }
 

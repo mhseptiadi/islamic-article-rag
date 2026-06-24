@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,6 +11,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+var ErrQnARecordNotFound = errors.New("qna record not found")
 
 type QnARepository struct {
 	client     *mongo.Client
@@ -57,6 +60,24 @@ func (r *QnARepository) Insert(ctx context.Context, record model.QnARecord) erro
 	_, err := r.collection.InsertOne(ctx, record)
 	if err != nil {
 		return fmt.Errorf("insert qna record: %w", err)
+	}
+	return nil
+}
+
+func (r *QnARepository) UpdateFeedback(ctx context.Context, id string, feedbackType model.FeedbackType, comment string) error {
+	now := time.Now().UTC()
+	result, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, bson.M{
+		"$set": bson.M{
+			"feedback_type": string(feedbackType),
+			"comment":       comment,
+			"feedback_at":   now,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("update qna feedback: %w", err)
+	}
+	if result.MatchedCount == 0 {
+		return ErrQnARecordNotFound
 	}
 	return nil
 }
