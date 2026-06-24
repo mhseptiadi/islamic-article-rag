@@ -26,6 +26,7 @@ func main() {
 
 	embedder := service.NewEmbeddingClient(cfg.EmbeddingProvider, cfg.EmbeddingAPIKey, cfg.EmbeddingURL, cfg.EmbeddingModel)
 	llm := service.NewLLMClient(cfg.LLMProvider, cfg.LLMAPIKey, cfg.LLMApiURL, cfg.LLMModel, cfg.LLMTemperature, cfg.LLMMaxCompletionTokens, cfg.LLMTopP, cfg.LLMStream, cfg.LLMReasoningEffort)
+	topicDetector := service.NewTopicDetectorClient(cfg.LLMTopicDetectorAPIKey, cfg.LLMTopicDetectorAPIURL, cfg.LLMTopicDetectorModel)
 	textValidator := service.NewIslamicTextValidatorClient(cfg.IslamicTextValidatorURL)
 
 	vectors, err := qdrant.NewVectorRepository(cfg.QdrantHost, cfg.QdrantAPIKey, cfg.QdrantGRPCPort, cfg.QdrantCollection, cfg.MinSimilarityScore)
@@ -53,7 +54,7 @@ func main() {
 	defer rateLimiter.Close()
 
 	orchestrator := service.NewQnAOrchestrator(
-		embedder, llm, textValidator, vectors, articles, qnaRecords,
+		embedder, llm, topicDetector, textValidator, vectors, articles, qnaRecords,
 		cfg.QnARetrievalLimit, cfg.QnAContextSource,
 		cfg.LLMProvider, cfg.LLMModel,
 	)

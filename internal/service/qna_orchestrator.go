@@ -21,6 +21,7 @@ const (
 type QnAOrchestrator struct {
 	embedder       *EmbeddingClient
 	llm            *LLMClient
+	topicDetector  *TopicDetectorClient
 	textValidator  *IslamicTextValidatorClient
 	vectors        *qdrant.VectorRepository
 	articles       *mongo.ArticleRepository
@@ -34,6 +35,7 @@ type QnAOrchestrator struct {
 func NewQnAOrchestrator(
 	embedder *EmbeddingClient,
 	llm *LLMClient,
+	topicDetector *TopicDetectorClient,
 	textValidator *IslamicTextValidatorClient,
 	vectors *qdrant.VectorRepository,
 	articles *mongo.ArticleRepository,
@@ -46,6 +48,7 @@ func NewQnAOrchestrator(
 	return &QnAOrchestrator{
 		embedder:       embedder,
 		llm:            llm,
+		topicDetector:  topicDetector,
 		textValidator:  textValidator,
 		vectors:        vectors,
 		articles:       articles,
@@ -60,6 +63,7 @@ func NewQnAOrchestrator(
 type AskResult struct {
 	RecordID                      string                         `json:"record_id"`
 	Answer                        string                         `json:"answer"`
+	OffTopic                      bool                           `json:"off_topic,omitempty"`
 	IslamicTextValidationResponse *IslamicTextValidationResponse `json:"islamicTextValidationResponse"`
 	FullArticles                  []model.Article                `json:"full_articles"`
 	Chunks                        []model.Chunk                  `json:"chunks"`
@@ -68,6 +72,16 @@ type AskResult struct {
 var ErrInvalidFeedbackType = errors.New("invalid feedback_type")
 
 func (o *QnAOrchestrator) Ask(ctx context.Context, question, clientIP string) (*AskResult, error) {
+	if o.topicDetector != nil && o.topicDetector.Enabled() {
+		isIslamic, err := o.topicDetector.IsIslamicTopic(ctx, question)
+		if err != nil {
+			return nil, err
+		}
+		if !isIslamic {
+			return o.offTopicResult(ctx, question, clientIP)
+		}
+	}
+
 	embeddings, err := o.embedder.Embed(ctx, []string{question})
 	if err != nil {
 		return nil, err
@@ -143,6 +157,29 @@ func (o *QnAOrchestrator) Ask(ctx context.Context, question, clientIP string) (*
 		IslamicTextValidationResponse: validation,
 		FullArticles:                  fullArticles,
 		Chunks:                        chunks,
+	}, nil
+}
+
+func (o *QnAOrchestrator) offTopicResult(ctx context.Context, question, clientIP string) (*AskResult, error) {
+	recordID := uuid.New().String()
+	if err := o.qnaRecords.Insert(ctx, model.QnARecord{
+		ID:              recordID,
+		Question:        question,
+		Answer:          OffTopicAnswer,
+		ValidatedAnswer: OffTopicAnswer,
+		LLMProvider:     o.llmProvider,
+		LLMModel:        o.llmModel,
+		ContextSource:   o.contextSource,
+		CreatedAt:       time.Now().UTC(),
+		IPAddress:       clientIP,
+	}); err != nil {
+		return nil, fmt.Errorf("record qna: %w", err)
+	}
+
+	return &AskResult{
+		RecordID: recordID,
+		Answer:   OffTopicAnswer,
+		OffTopic: true,
 	}, nil
 }
 

@@ -35,6 +35,10 @@ type Config struct {
 	LLMStream              bool
 	LLMReasoningEffort     string
 
+	LLMTopicDetectorModel  string
+	LLMTopicDetectorAPIKey string
+	LLMTopicDetectorAPIURL string
+
 	RawArticlesDir     string
 	ChunkWindowSize    int
 	ChunkStepSize      int
@@ -86,6 +90,9 @@ func Load() (*Config, error) {
 		LLMTopP:                 getEnvFloat("LLM_TOP_P", 1, fileEnv),
 		LLMStream:               getEnv("LLM_STREAM", "true", fileEnv) == "true",
 		LLMReasoningEffort:      getEnv("LLM_REASONING_EFFORT", "medium", fileEnv),
+		LLMTopicDetectorModel:   getEnv("LLM_TOPIC_DETECTOR_MODEL", "", fileEnv),
+		LLMTopicDetectorAPIKey:  getEnv("LLM_TOPIC_DETECTOR_API_KEY", "", fileEnv),
+		LLMTopicDetectorAPIURL:  getEnv("LLM_TOPIC_DETECTOR_API_URL", "https://api.groq.com/openai/v1/chat/completions", fileEnv),
 		RawArticlesDir:          getEnv("RAW_ARTICLES_DIR", "data/raw_articles", fileEnv),
 		ChunkWindowSize:         getEnvInt("CHUNK_WINDOW_SIZE", 3, fileEnv),
 		ChunkStepSize:           getEnvInt("CHUNK_STEP_SIZE", 2, fileEnv),

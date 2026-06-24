@@ -8,6 +8,7 @@ const btnLabel = submitBtn.querySelector(".btn-label");
 const btnSpinner = submitBtn.querySelector(".btn-spinner");
 const statusEl = document.getElementById("status");
 const answerSection = document.getElementById("answer-section");
+const answerDisclaimer = document.getElementById("answer-disclaimer");
 const answerEl = document.getElementById("answer");
 const feedbackSection = document.getElementById("feedback-section");
 const feedbackForm = document.getElementById("feedback-form");
@@ -70,14 +71,16 @@ function escapeHTML(value) {
     .replaceAll("'", "&#39;");
 }
 
-function renderAnswer(text) {
+function renderAnswer(text, offTopic = false) {
   if (!text) {
     answerSection.hidden = true;
     answerEl.innerHTML = "";
+    answerDisclaimer.hidden = false;
     return;
   }
 
   answerSection.hidden = false;
+  answerDisclaimer.hidden = offTopic;
   answerEl.innerHTML = formatAnswerHTML(text);
 }
 
@@ -260,9 +263,9 @@ form.addEventListener("submit", async (event) => {
 
   try {
     const data = await askQuestion(question);
-    renderAnswer(data.answer || "");
+    renderAnswer(data.answer || "", data.off_topic);
     renderSources(data);
-    if (data.record_id) {
+    if (data.record_id && !data.off_topic) {
       showFeedbackForm(data.record_id);
     }
   } catch (error) {
