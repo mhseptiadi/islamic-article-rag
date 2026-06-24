@@ -34,15 +34,18 @@ func (t FeedbackType) Valid() bool {
 }
 
 type QnARecord struct {
-	ID            string     `json:"id" bson:"_id"`
-	Question      string     `json:"question" bson:"question"`
-	Answer        string     `json:"answer" bson:"answer"`
-	LLMProvider   string     `json:"llm_provider,omitempty" bson:"llm_provider,omitempty"`
-	LLMModel      string     `json:"llm_model,omitempty" bson:"llm_model,omitempty"`
-	ContextSource string     `json:"context_source,omitempty" bson:"context_source,omitempty"`
-	ArticleIDs    []string   `json:"article_ids,omitempty" bson:"article_ids,omitempty"`
-	Chunks        []QnAChunk `json:"chunks,omitempty" bson:"chunks,omitempty"`
-	CreatedAt     time.Time  `json:"created_at" bson:"created_at"`
+	ID              string     `json:"id" bson:"_id"`
+	Question        string     `json:"question" bson:"question"`
+	Answer          string     `json:"answer" bson:"answer"`
+	ValidatedAnswer string     `json:"validated_answer" bson:"validated_answer"`
+	LLMProvider     string     `json:"llm_provider,omitempty" bson:"llm_provider,omitempty"`
+	LLMModel        string     `json:"llm_model,omitempty" bson:"llm_model,omitempty"`
+	ContextSource   string     `json:"context_source,omitempty" bson:"context_source,omitempty"`
+	ArticleIDs      []string   `json:"article_ids,omitempty" bson:"article_ids,omitempty"`
+	Chunks          []QnAChunk `json:"chunks,omitempty" bson:"chunks,omitempty"`
+	CreatedAt       time.Time  `json:"created_at" bson:"created_at"`
+
+	IPAddress string `json:"ip_address,omitempty" bson:"ip_address,omitempty"`
 
 	// feedback
 	FeedbackType string    `json:"feedback_type,omitempty" bson:"feedback_type,omitempty"`

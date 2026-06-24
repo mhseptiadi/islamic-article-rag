@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
-	"net"
 	"net/http"
-	"strings"
 
 	"github.com/mhseptiadi/islamic-article-rag/internal/config"
 	"github.com/mhseptiadi/islamic-article-rag/internal/handler"
@@ -75,7 +73,7 @@ func main() {
 
 func ipRateLimit(limiter *redisrepo.RateLimitRepository, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		allowed, err := limiter.AllowIP(r.Context(), clientIP(r))
+		allowed, err := limiter.AllowIP(r.Context(), handler.ClientIP(r))
 		if err != nil {
 			http.Error(w, "rate limit check failed", http.StatusInternalServerError)
 			return
@@ -86,22 +84,6 @@ func ipRateLimit(limiter *redisrepo.RateLimitRepository, next http.HandlerFunc) 
 		}
 		next(w, r)
 	}
-}
-
-func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if ip := strings.TrimSpace(strings.Split(xff, ",")[0]); ip != "" {
-			return ip
-		}
-	}
-	if xri := strings.TrimSpace(r.Header.Get("X-Real-IP")); xri != "" {
-		return xri
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }
 
 func registerWebRoutes(mux *http.ServeMux) {

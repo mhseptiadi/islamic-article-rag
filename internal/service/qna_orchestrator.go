@@ -67,7 +67,7 @@ type AskResult struct {
 
 var ErrInvalidFeedbackType = errors.New("invalid feedback_type")
 
-func (o *QnAOrchestrator) Ask(ctx context.Context, question string) (*AskResult, error) {
+func (o *QnAOrchestrator) Ask(ctx context.Context, question, clientIP string) (*AskResult, error) {
 	embeddings, err := o.embedder.Embed(ctx, []string{question})
 	if err != nil {
 		return nil, err
@@ -122,15 +122,17 @@ func (o *QnAOrchestrator) Ask(ctx context.Context, question string) (*AskResult,
 
 	recordID := uuid.New().String()
 	if err := o.qnaRecords.Insert(ctx, model.QnARecord{
-		ID:            recordID,
-		Question:      question,
-		Answer:        validatedAnswer,
-		LLMProvider:   o.llmProvider,
-		LLMModel:      o.llmModel,
-		ContextSource: o.contextSource,
-		ArticleIDs:    articleIDsFromArticles(fullArticles),
-		Chunks:        chunksForQnARecord(chunks),
-		CreatedAt:     time.Now().UTC(),
+		ID:              recordID,
+		Question:        question,
+		Answer:          answer,
+		ValidatedAnswer: validatedAnswer,
+		LLMProvider:     o.llmProvider,
+		LLMModel:        o.llmModel,
+		ContextSource:   o.contextSource,
+		ArticleIDs:      articleIDsFromArticles(fullArticles),
+		Chunks:          chunksForQnARecord(chunks),
+		CreatedAt:       time.Now().UTC(),
+		IPAddress:       clientIP,
 	}); err != nil {
 		return nil, fmt.Errorf("record qna: %w", err)
 	}

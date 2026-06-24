@@ -49,7 +49,7 @@ func (h *QnAHandler) Ask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.orchestrator.Ask(r.Context(), req.Question)
+	result, err := h.orchestrator.Ask(r.Context(), req.Question, ClientIP(r))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

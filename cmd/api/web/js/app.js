@@ -1,3 +1,5 @@
+import { formatAnswerHTML } from "./answer-format.js";
+
 const form = document.getElementById("ask-form");
 const questionInput = document.getElementById("question");
 const charCount = document.getElementById("char-count");
@@ -18,7 +20,6 @@ const feedbackBtnSpinner = feedbackSubmitBtn.querySelector(".btn-spinner");
 const feedbackSuccessEl = document.getElementById("feedback-success");
 const sourcesSection = document.getElementById("sources-section");
 const sourcesEl = document.getElementById("sources");
-
 const MAX_CHARS = Number(questionInput.getAttribute("maxlength")) || 300;
 const MAX_FEEDBACK_CHARS = Number(feedbackComment.getAttribute("maxlength")) || 1000;
 
@@ -72,12 +73,12 @@ function escapeHTML(value) {
 function renderAnswer(text) {
   if (!text) {
     answerSection.hidden = true;
-    answerEl.textContent = "";
+    answerEl.innerHTML = "";
     return;
   }
 
   answerSection.hidden = false;
-  answerEl.textContent = text;
+  answerEl.innerHTML = formatAnswerHTML(text);
 }
 
 function renderSources(data) {

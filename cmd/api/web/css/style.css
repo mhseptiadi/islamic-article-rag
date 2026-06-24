@@ -208,7 +208,47 @@ textarea:disabled {
   font-family: var(--font-serif);
   font-size: 1.05rem;
   line-height: 1.75;
-  white-space: pre-wrap;
+}
+
+.answer-body p {
+  margin: 0 0 1rem;
+}
+
+.answer-body p:last-child {
+  margin-bottom: 0;
+}
+
+.answer-body ol,
+.answer-body ul {
+  margin: 0 0 1rem;
+  padding-left: 1.4rem;
+}
+
+.answer-body li {
+  margin-bottom: 0.5rem;
+}
+
+.answer-body li:last-child {
+  margin-bottom: 0;
+}
+
+.answer-body strong {
+  font-weight: 700;
+}
+
+.answer-body .islamic-citation em {
+  font-style: italic;
+}
+
+.answer-body .islamic-citation-block {
+  display: inline;
+}
+
+.answer-body .islamic-citation-ref {
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--accent);
 }
 
 .disclaimer {
