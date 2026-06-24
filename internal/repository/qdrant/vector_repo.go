@@ -72,39 +72,39 @@ func (r *VectorRepository) InsertChunks(ctx context.Context, chunks []model.Chun
 	return nil
 }
 
-func (r *VectorRepository) SearchSimilar(ctx context.Context, vector []float32, limit int) ([]model.Chunk, error) {
-	if len(vector) == 0 {
-		return nil, fmt.Errorf("search vector is empty")
-	}
+// func (r *VectorRepository) SearchSimilar(ctx context.Context, vector []float32, limit int) ([]model.Chunk, error) {
+// 	if len(vector) == 0 {
+// 		return nil, fmt.Errorf("search vector is empty")
+// 	}
 
-	if limit <= 0 {
-		limit = 5
-	}
-	queryLimit := uint64(limit)
-	scoreThreshold := r.minSimilarityScore
+// 	if limit <= 0 {
+// 		limit = 5
+// 	}
+// 	queryLimit := uint64(limit)
+// 	scoreThreshold := r.minSimilarityScore
 
-	results, err := r.client.Query(ctx, &qdrant.QueryPoints{
-		CollectionName: r.collectionName,
-		Query:          qdrant.NewQueryDense(vector),
-		Using:          qdrant.PtrOf(DenseVectorName),
-		Limit:          &queryLimit,
-		ScoreThreshold: &scoreThreshold,
-		WithPayload:    qdrant.NewWithPayload(true),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("query similar points: %w", err)
-	}
+// 	results, err := r.client.Query(ctx, &qdrant.QueryPoints{
+// 		CollectionName: r.collectionName,
+// 		Query:          qdrant.NewQueryDense(vector),
+// 		Using:          qdrant.PtrOf(DenseVectorName),
+// 		Limit:          &queryLimit,
+// 		ScoreThreshold: &scoreThreshold,
+// 		WithPayload:    qdrant.NewWithPayload(true),
+// 	})
+// 	if err != nil {
+// 		return nil, fmt.Errorf("query similar points: %w", err)
+// 	}
 
-	chunks := make([]model.Chunk, 0, len(results))
-	for _, point := range results {
-		if point.GetScore() < r.minSimilarityScore {
-			continue
-		}
-		chunks = append(chunks, scoredPointToChunk(point))
-	}
+// 	chunks := make([]model.Chunk, 0, len(results))
+// 	for _, point := range results {
+// 		if point.GetScore() < r.minSimilarityScore {
+// 			continue
+// 		}
+// 		chunks = append(chunks, scoredPointToChunk(point))
+// 	}
 
-	return chunks, nil
-}
+// 	return chunks, nil
+// }
 
 // HybridSearch combines dense semantic search with sparse BM25 keyword search
 // using Reciprocal Rank Fusion (RRF).
@@ -153,6 +153,10 @@ func (r *VectorRepository) HybridSearch(ctx context.Context, denseVector []float
 
 	chunks := make([]model.Chunk, 0, len(results))
 	for _, point := range results {
+		// fmt.Println("point", point.GetScore())
+		if point.GetScore() < r.minSimilarityScore {
+			continue
+		}
 		chunks = append(chunks, scoredPointToChunk(point))
 	}
 
