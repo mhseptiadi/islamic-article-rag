@@ -71,6 +71,18 @@ type AskResult struct {
 
 var ErrInvalidFeedbackType = errors.New("invalid feedback_type")
 
+type AskStreamMeta struct {
+	OffTopic     bool            `json:"off_topic,omitempty"`
+	Chunks       []model.Chunk   `json:"chunks,omitempty"`
+	FullArticles []model.Article `json:"full_articles,omitempty"`
+}
+
+type askContext struct {
+	chunks        []model.Chunk
+	fullArticles  []model.Article
+	contextBlocks []string
+}
+
 func (o *QnAOrchestrator) Ask(ctx context.Context, question, clientIP string) (*AskResult, error) {
 	if o.topicDetector != nil && o.topicDetector.Enabled() {
 		isIslamic, err := o.topicDetector.IsIslamicTopic(ctx, question)
@@ -82,6 +94,133 @@ func (o *QnAOrchestrator) Ask(ctx context.Context, question, clientIP string) (*
 		}
 	}
 
+	actx, err := o.prepareAskContext(ctx, question)
+	if err != nil {
+		return nil, err
+	}
+
+	answer, err := o.llm.GenerateAnswer(ctx, question, actx.contextBlocks)
+	if err != nil {
+		return nil, err
+	}
+
+	validatedAnswer, validation := o.validateAnswer(ctx, answer)
+
+	recordID := uuid.New().String()
+	if err := o.qnaRecords.Insert(ctx, model.QnARecord{
+		ID:              recordID,
+		Question:        question,
+		Answer:          answer,
+		ValidatedAnswer: validatedAnswer,
+		LLMProvider:     o.llmProvider,
+		LLMModel:        o.llmModel,
+		ContextSource:   o.contextSource,
+		ArticleIDs:      articleIDsFromArticles(actx.fullArticles),
+		Chunks:          chunksForQnARecord(actx.chunks),
+		CreatedAt:       time.Now().UTC(),
+		IPAddress:       clientIP,
+	}); err != nil {
+		return nil, fmt.Errorf("record qna: %w", err)
+	}
+
+	return &AskResult{
+		RecordID:                      recordID,
+		Answer:                        validatedAnswer,
+		IslamicTextValidationResponse: validation,
+		FullArticles:                  actx.fullArticles,
+		Chunks:                        actx.chunks,
+	}, nil
+}
+
+// AskStream runs the Q&A pipeline and emits SSE-friendly events via emit.
+func (o *QnAOrchestrator) AskStream(
+	ctx context.Context,
+	question, clientIP string,
+	emit func(event string, data any) error,
+) error {
+	if o.topicDetector != nil && o.topicDetector.Enabled() {
+		isIslamic, err := o.topicDetector.IsIslamicTopic(ctx, question)
+		if err != nil {
+			return err
+		}
+		if !isIslamic {
+			return o.askStreamOffTopic(ctx, question, clientIP, emit)
+		}
+	}
+
+	actx, err := o.prepareAskContext(ctx, question)
+	if err != nil {
+		return err
+	}
+
+	if err := emit("meta", AskStreamMeta{
+		Chunks:       actx.chunks,
+		FullArticles: actx.fullArticles,
+	}); err != nil {
+		return err
+	}
+
+	answer, err := o.llm.GenerateAnswerStream(ctx, question, actx.contextBlocks, func(chunk string) error {
+		return emit("token", map[string]string{"text": chunk})
+	})
+	if err != nil {
+		return err
+	}
+
+	validatedAnswer, _ := o.validateAnswer(ctx, answer)
+	if err := emit("validated", map[string]string{"answer": validatedAnswer}); err != nil {
+		return err
+	}
+
+	recordID := uuid.New().String()
+	if err := o.qnaRecords.Insert(ctx, model.QnARecord{
+		ID:              recordID,
+		Question:        question,
+		Answer:          answer,
+		ValidatedAnswer: validatedAnswer,
+		LLMProvider:     o.llmProvider,
+		LLMModel:        o.llmModel,
+		ContextSource:   o.contextSource,
+		ArticleIDs:      articleIDsFromArticles(actx.fullArticles),
+		Chunks:          chunksForQnARecord(actx.chunks),
+		CreatedAt:       time.Now().UTC(),
+		IPAddress:       clientIP,
+	}); err != nil {
+		return fmt.Errorf("record qna: %w", err)
+	}
+
+	return emit("done", map[string]string{"record_id": recordID})
+}
+
+func (o *QnAOrchestrator) askStreamOffTopic(ctx context.Context, question, clientIP string, emit func(event string, data any) error) error {
+	recordID := uuid.New().String()
+	if err := o.qnaRecords.Insert(ctx, model.QnARecord{
+		ID:              recordID,
+		Question:        question,
+		Answer:          OffTopicAnswer,
+		ValidatedAnswer: OffTopicAnswer,
+		LLMProvider:     o.llmProvider,
+		LLMModel:        o.llmModel,
+		ContextSource:   o.contextSource,
+		CreatedAt:       time.Now().UTC(),
+		IPAddress:       clientIP,
+	}); err != nil {
+		return fmt.Errorf("record qna: %w", err)
+	}
+
+	if err := emit("meta", AskStreamMeta{OffTopic: true}); err != nil {
+		return err
+	}
+	if err := emit("token", map[string]string{"text": OffTopicAnswer}); err != nil {
+		return err
+	}
+	if err := emit("validated", map[string]string{"answer": OffTopicAnswer}); err != nil {
+		return err
+	}
+	return emit("done", map[string]any{"record_id": recordID, "off_topic": true})
+}
+
+func (o *QnAOrchestrator) prepareAskContext(ctx context.Context, question string) (*askContext, error) {
 	embeddings, err := o.embedder.Embed(ctx, []string{question})
 	if err != nil {
 		return nil, err
@@ -118,46 +257,24 @@ func (o *QnAOrchestrator) Ask(ctx context.Context, question, clientIP string) (*
 		}
 	}
 
-	answer, err := o.llm.GenerateAnswer(ctx, question, contextBlocks)
-	if err != nil {
-		return nil, err
-	}
-
-	validation, err := o.textValidator.Validate(ctx, answer)
-	var validatedAnswer string
-	if err != nil {
-		validatedAnswer = ReplaceIslamicTagsOnValidationError(answer)
-	} else {
-		validatedAnswer = validation.ReplacedText
-		if validatedAnswer == "" {
-			validatedAnswer = answer
-		}
-	}
-
-	recordID := uuid.New().String()
-	if err := o.qnaRecords.Insert(ctx, model.QnARecord{
-		ID:              recordID,
-		Question:        question,
-		Answer:          answer,
-		ValidatedAnswer: validatedAnswer,
-		LLMProvider:     o.llmProvider,
-		LLMModel:        o.llmModel,
-		ContextSource:   o.contextSource,
-		ArticleIDs:      articleIDsFromArticles(fullArticles),
-		Chunks:          chunksForQnARecord(chunks),
-		CreatedAt:       time.Now().UTC(),
-		IPAddress:       clientIP,
-	}); err != nil {
-		return nil, fmt.Errorf("record qna: %w", err)
-	}
-
-	return &AskResult{
-		RecordID:                      recordID,
-		Answer:                        validatedAnswer,
-		IslamicTextValidationResponse: validation,
-		FullArticles:                  fullArticles,
-		Chunks:                        chunks,
+	return &askContext{
+		chunks:        chunks,
+		fullArticles:  fullArticles,
+		contextBlocks: contextBlocks,
 	}, nil
+}
+
+func (o *QnAOrchestrator) validateAnswer(ctx context.Context, answer string) (string, *IslamicTextValidationResponse) {
+	validation, err := o.textValidator.Validate(ctx, answer)
+	if err != nil {
+		return ReplaceIslamicTagsOnValidationError(answer), nil
+	}
+
+	validatedAnswer := validation.ReplacedText
+	if validatedAnswer == "" {
+		validatedAnswer = answer
+	}
+	return validatedAnswer, validation
 }
 
 func (o *QnAOrchestrator) offTopicResult(ctx context.Context, question, clientIP string) (*AskResult, error) {

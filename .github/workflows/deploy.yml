@@ -58,6 +58,7 @@ jobs:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_API_URL: ${{ vars.LLM_API_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
+          LLM_STREAM: true
 
           # --- LLM topic detector ---
           LLM_TOPIC_DETECTOR_MODEL: ${{ vars.LLM_MODEL }}
@@ -115,6 +116,7 @@ jobs:
               "LLM_API_KEY",
               "LLM_API_URL",
               "LLM_MODEL",
+              "LLM_STREAM",
               "LLM_TOPIC_DETECTOR_MODEL",
               "LLM_TOPIC_DETECTOR_API_KEY",
               "LLM_TOPIC_DETECTOR_API_URL",

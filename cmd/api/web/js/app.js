@@ -221,28 +221,72 @@ async function submitFeedback(recordID, feedbackType, comment) {
   return payload;
 }
 
-async function askQuestion(question) {
+async function askQuestionStream(question, { onMeta, onToken, onValidated, onDone, onError }) {
   const response = await fetch("/api/v1/ask", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Accept: "application/json",
+      Accept: "text/event-stream",
     },
     body: JSON.stringify({ question }),
   });
 
-  const contentType = response.headers.get("content-type") || "";
-  const isJSON = contentType.includes("application/json");
-  const payload = isJSON ? await response.json() : await response.text();
-
   if (!response.ok) {
-    const message = typeof payload === "string" && payload.trim()
-      ? payload.trim()
-      : payload?.message || `Request failed (${response.status})`;
-    throw new Error(message);
+    const text = await response.text();
+    throw new Error(text.trim() || `Request failed (${response.status})`);
   }
 
-  return payload;
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() || "";
+
+    for (const part of parts) {
+      if (!part.trim()) {
+        continue;
+      }
+
+      let eventName = "message";
+      let dataLine = "";
+      for (const line of part.split("\n")) {
+        if (line.startsWith("event: ")) {
+          eventName = line.slice(7);
+        } else if (line.startsWith("data: ")) {
+          dataLine = line.slice(6);
+        }
+      }
+
+      if (!dataLine) {
+        continue;
+      }
+
+      const payload = JSON.parse(dataLine);
+      if (eventName === "meta" && onMeta) {
+        onMeta(payload);
+      } else if (eventName === "token" && onToken) {
+        onToken(payload);
+      } else if (eventName === "validated" && onValidated) {
+        onValidated(payload);
+      } else if (eventName === "done" && onDone) {
+        onDone(payload);
+      } else if (eventName === "error") {
+        const message = payload?.message || "An error occurred while processing your question.";
+        if (onError) {
+          onError(message);
+        }
+        throw new Error(message);
+      }
+    }
+  }
 }
 
 form.addEventListener("submit", async (event) => {
@@ -261,13 +305,34 @@ form.addEventListener("submit", async (event) => {
   sourcesSection.hidden = true;
   resetFeedbackForm();
 
+  let streamingAnswer = "";
+  let offTopic = false;
+
   try {
-    const data = await askQuestion(question);
-    renderAnswer(data.answer || "", data.off_topic);
-    renderSources(data);
-    if (data.record_id && !data.off_topic) {
-      showFeedbackForm(data.record_id);
-    }
+    await askQuestionStream(question, {
+      onMeta(data) {
+        offTopic = Boolean(data.off_topic);
+        if (!offTopic) {
+          renderSources(data);
+        }
+        btnLabel.textContent = "Answering...";
+      },
+      onToken(data) {
+        streamingAnswer += data.text || "";
+        answerSection.hidden = false;
+        answerDisclaimer.hidden = offTopic;
+        answerEl.textContent = streamingAnswer;
+      },
+      onValidated(data) {
+        renderAnswer(data.answer || streamingAnswer, offTopic);
+      },
+      onDone(data) {
+        offTopic = offTopic || Boolean(data.off_topic);
+        if (data.record_id && !offTopic) {
+          showFeedbackForm(data.record_id);
+        }
+      },
+    });
   } catch (error) {
     renderAnswer("");
     renderSources({ chunks: [], full_articles: [] });
