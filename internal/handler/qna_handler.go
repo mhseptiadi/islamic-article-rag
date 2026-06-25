@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/mhseptiadi/islamic-article-rag/internal/model"
 	mongorepo "github.com/mhseptiadi/islamic-article-rag/internal/repository/mongo"
@@ -49,6 +50,11 @@ func (h *QnAHandler) Ask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+		h.askStream(w, r, req.Question)
+		return
+	}
+
 	result, err := h.orchestrator.Ask(r.Context(), req.Question, ClientIP(r))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -57,6 +63,19 @@ func (h *QnAHandler) Ask(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(result)
+}
+
+func (h *QnAHandler) askStream(w http.ResponseWriter, r *http.Request, question string) {
+	sse, err := newSSEWriter(w)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = h.orchestrator.AskStream(r.Context(), question, ClientIP(r), sse.send)
+	if err != nil {
+		sse.sendError(err.Error())
+	}
 }
 
 const maxFeedbackCommentChars = 1000

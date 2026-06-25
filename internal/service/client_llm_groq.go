@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-func (c *LLMClient) generateGroq(ctx context.Context, question string, contextBlocks []string) (string, error) {
+func (c *LLMClient) generateGroqStream(ctx context.Context, question string, contextBlocks []string, onChunk StreamChunkFn) (string, error) {
 	if c.apiKey == "" {
 		return "", fmt.Errorf("groq LLM requires LLM_API_KEY")
 	}
@@ -48,8 +48,15 @@ func (c *LLMClient) generateGroq(ctx context.Context, question string, contextBl
 		return "", fmt.Errorf("groq API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
+	if c.stream {
+		return c.readGroqSSE(resp.Body, onChunk)
+	}
+	return c.readGroqJSON(resp.Body, onChunk)
+}
+
+func (c *LLMClient) readGroqSSE(body io.Reader, onChunk StreamChunkFn) (string, error) {
 	var answer strings.Builder
-	scanner := bufio.NewScanner(resp.Body)
+	scanner := bufio.NewScanner(body)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if !strings.HasPrefix(line, "data: ") {
@@ -70,8 +77,18 @@ func (c *LLMClient) generateGroq(ctx context.Context, question string, contextBl
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
 			return "", fmt.Errorf("decode groq stream chunk: %w", err)
 		}
-		if len(chunk.Choices) > 0 {
-			answer.WriteString(chunk.Choices[0].Delta.Content)
+		if len(chunk.Choices) == 0 {
+			continue
+		}
+		text := chunk.Choices[0].Delta.Content
+		if text == "" {
+			continue
+		}
+		answer.WriteString(text)
+		if onChunk != nil {
+			if err := onChunk(text); err != nil {
+				return "", err
+			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -84,6 +101,34 @@ func (c *LLMClient) generateGroq(ctx context.Context, question string, contextBl
 	}
 
 	return result, nil
+}
+
+func (c *LLMClient) readGroqJSON(body io.Reader, onChunk StreamChunkFn) (string, error) {
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.NewDecoder(body).Decode(&result); err != nil {
+		return "", fmt.Errorf("decode groq response: %w", err)
+	}
+	if len(result.Choices) == 0 {
+		return "", fmt.Errorf("groq API returned empty response")
+	}
+
+	answer := strings.TrimSpace(result.Choices[0].Message.Content)
+	if answer == "" {
+		return "", fmt.Errorf("groq API returned empty response")
+	}
+	if onChunk != nil {
+		if err := onChunk(answer); err != nil {
+			return "", err
+		}
+	}
+
+	return answer, nil
 }
 
 func (c *LLMClient) groqRequestURL() string {

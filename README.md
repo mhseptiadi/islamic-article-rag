@@ -313,6 +313,8 @@ scripts/        # Qdrant collection bootstrap
 
 ## How QnA works
 
+![Q&A request flow](flow.png)
+
 1. The API checks the client IP against Redis (`MAX_IP_REQUESTS_PER_MINUTE`, 1-minute TTL window).
 2. The question is embedded with the same model used at ingest time.
 3. Qdrant runs hybrid search: dense cosine similarity + sparse BM25, fused with RRF.
