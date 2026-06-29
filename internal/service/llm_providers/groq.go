@@ -1,4 +1,4 @@
-package service
+package llmproviders
 
 import (
 	"bufio"
@@ -11,33 +11,33 @@ import (
 	"strings"
 )
 
-func (c *LLMClient) generateGroqStream(ctx context.Context, question string, contextBlocks []string, onChunk StreamChunkFn) (string, error) {
-	if c.apiKey == "" {
+func GenerateGroqStream(ctx context.Context, cfg Config, messages []map[string]string, onChunk StreamChunkFn) (string, error) {
+	if cfg.APIKey == "" {
 		return "", fmt.Errorf("groq LLM requires LLM_API_KEY")
 	}
 
 	payload := map[string]any{
-		"messages":              buildRAGMessages(question, contextBlocks),
-		"model":                 c.model,
-		"temperature":           c.temperature,
-		"max_completion_tokens": c.maxCompletionTokens,
-		"top_p":                 c.topP,
-		"stream":                c.stream,
-		"reasoning_effort":      c.reasoningEffort,
+		"messages":              messages,
+		"model":                 cfg.Model,
+		"temperature":           cfg.Temperature,
+		"max_completion_tokens": cfg.MaxCompletionTokens,
+		"top_p":                 cfg.TopP,
+		"stream":                cfg.Stream,
+		"reasoning_effort":      cfg.ReasoningEffort,
 	}
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("marshal groq request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.groqRequestURL(), bytes.NewReader(jsonData))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, groqRequestURL(cfg), bytes.NewReader(jsonData))
 	if err != nil {
 		return "", fmt.Errorf("create groq request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := cfg.HTTPClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("call groq API: %w", err)
 	}
@@ -48,13 +48,13 @@ func (c *LLMClient) generateGroqStream(ctx context.Context, question string, con
 		return "", fmt.Errorf("groq API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
-	if c.stream {
-		return c.readGroqSSE(resp.Body, onChunk)
+	if cfg.Stream {
+		return readGroqSSE(resp.Body, onChunk)
 	}
-	return c.readGroqJSON(resp.Body, onChunk)
+	return readGroqJSON(resp.Body, onChunk)
 }
 
-func (c *LLMClient) readGroqSSE(body io.Reader, onChunk StreamChunkFn) (string, error) {
+func readGroqSSE(body io.Reader, onChunk StreamChunkFn) (string, error) {
 	var answer strings.Builder
 	scanner := bufio.NewScanner(body)
 	for scanner.Scan() {
@@ -103,7 +103,7 @@ func (c *LLMClient) readGroqSSE(body io.Reader, onChunk StreamChunkFn) (string, 
 	return result, nil
 }
 
-func (c *LLMClient) readGroqJSON(body io.Reader, onChunk StreamChunkFn) (string, error) {
+func readGroqJSON(body io.Reader, onChunk StreamChunkFn) (string, error) {
 	var result struct {
 		Choices []struct {
 			Message struct {
@@ -131,9 +131,9 @@ func (c *LLMClient) readGroqJSON(body io.Reader, onChunk StreamChunkFn) (string,
 	return answer, nil
 }
 
-func (c *LLMClient) groqRequestURL() string {
-	if strings.Contains(c.apiURL, "groq.com") || strings.Contains(c.apiURL, "chat/completions") {
-		return c.apiURL
+func groqRequestURL(cfg Config) string {
+	if strings.Contains(cfg.APIURL, "groq.com") || strings.Contains(cfg.APIURL, "chat/completions") {
+		return cfg.APIURL
 	}
 	return "https://api.groq.com/openai/v1/chat/completions"
 }

@@ -1,4 +1,4 @@
-package service
+package llmproviders
 
 import (
 	"bytes"
@@ -10,9 +10,9 @@ import (
 	"strings"
 )
 
-func (c *LLMClient) generateOllama(ctx context.Context, prompt string) (string, error) {
+func GenerateOllama(ctx context.Context, cfg Config, prompt string) (string, error) {
 	payload := map[string]any{
-		"model":  c.model,
+		"model":  cfg.Model,
 		"prompt": prompt,
 		"stream": false,
 	}
@@ -21,13 +21,13 @@ func (c *LLMClient) generateOllama(ctx context.Context, prompt string) (string, 
 		return "", fmt.Errorf("marshal ollama request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.apiURL, bytes.NewReader(jsonData))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.APIURL, bytes.NewReader(jsonData))
 	if err != nil {
 		return "", fmt.Errorf("create ollama request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := cfg.HTTPClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("call ollama API: %w", err)
 	}

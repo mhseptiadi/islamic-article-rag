@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+
+	llmproviders "github.com/mhseptiadi/islamic-article-rag/internal/service/llm_providers"
 )
 
 type Message struct {
@@ -13,7 +15,7 @@ type Message struct {
 
 // StreamChunkFn is called for each LLM text chunk when streaming is available.
 // Return a non-nil error to abort generation.
-type StreamChunkFn func(chunk string) error
+type StreamChunkFn = llmproviders.StreamChunkFn
 
 type LLMClient struct {
 	provider   string
@@ -48,11 +50,26 @@ func (c *LLMClient) GenerateAnswer(ctx context.Context, question string, context
 	return c.GenerateAnswerStream(ctx, question, contextBlocks, nil)
 }
 
+func (c *LLMClient) providerConfig() llmproviders.Config {
+	return llmproviders.Config{
+		APIKey:              c.apiKey,
+		APIURL:              c.apiURL,
+		Model:               c.model,
+		HTTPClient:          c.httpClient,
+		Temperature:         c.temperature,
+		MaxCompletionTokens: c.maxCompletionTokens,
+		TopP:                c.topP,
+		Stream:              c.stream,
+		ReasoningEffort:     c.reasoningEffort,
+	}
+}
+
 func (c *LLMClient) GenerateAnswerStream(ctx context.Context, question string, contextBlocks []string, onChunk StreamChunkFn) (string, error) {
 	fmt.Println("c.provider: ", c.provider)
+	cfg := c.providerConfig()
 	switch c.provider {
 	case "google":
-		answer, err := c.generateGoogle(ctx, buildRAGPrompt(question, contextBlocks))
+		answer, err := llmproviders.GenerateGoogle(ctx, cfg, buildRAGPrompt(question, contextBlocks))
 		if err != nil {
 			return "", err
 		}
@@ -63,9 +80,9 @@ func (c *LLMClient) GenerateAnswerStream(ctx context.Context, question string, c
 		}
 		return answer, nil
 	case "groq":
-		return c.generateGroqStream(ctx, question, contextBlocks, onChunk)
+		return llmproviders.GenerateGroqStream(ctx, cfg, buildRAGMessages(question, contextBlocks), onChunk)
 	default:
-		answer, err := c.generateOllama(ctx, buildRAGPrompt(question, contextBlocks))
+		answer, err := llmproviders.GenerateOllama(ctx, cfg, buildRAGPrompt(question, contextBlocks))
 		if err != nil {
 			return "", err
 		}

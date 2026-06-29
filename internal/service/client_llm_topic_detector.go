@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	llmproviders "github.com/mhseptiadi/islamic-article-rag/internal/service/llm_providers"
 )
 
 const (
@@ -32,12 +34,21 @@ func (c *TopicDetectorClient) Enabled() bool {
 	return c.apiKey != "" && c.apiURL != "" && c.model != ""
 }
 
+func (c *TopicDetectorClient) providerConfig() llmproviders.Config {
+	return llmproviders.Config{
+		APIKey:     c.apiKey,
+		APIURL:     c.apiURL,
+		Model:      c.model,
+		HTTPClient: c.httpClient,
+	}
+}
+
 func (c *TopicDetectorClient) IsIslamicTopic(ctx context.Context, question string) (bool, error) {
 	if !c.Enabled() {
 		return true, nil
 	}
 
-	answer, err := c.detectGroq(ctx, question)
+	answer, err := llmproviders.DetectTopicGroq(ctx, c.providerConfig(), topicDetectorSystemPrompt, question)
 	if err != nil {
 		return false, err
 	}

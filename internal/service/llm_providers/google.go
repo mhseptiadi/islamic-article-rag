@@ -1,4 +1,4 @@
-package service
+package llmproviders
 
 import (
 	"bytes"
@@ -10,8 +10,8 @@ import (
 	"strings"
 )
 
-func (c *LLMClient) generateGoogle(ctx context.Context, prompt string) (string, error) {
-	if c.apiKey == "" {
+func GenerateGoogle(ctx context.Context, cfg Config, prompt string) (string, error) {
+	if cfg.APIKey == "" {
 		return "", fmt.Errorf("google LLM requires LLM_API_KEY")
 	}
 
@@ -29,7 +29,7 @@ func (c *LLMClient) generateGoogle(ctx context.Context, prompt string) (string, 
 		return "", fmt.Errorf("marshal google request: %w", err)
 	}
 
-	url := c.googleRequestURL()
+	url := googleRequestURL(cfg)
 	fmt.Println("url: ", url)
 	fmt.Println("jsonData: ", string(jsonData))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(jsonData))
@@ -38,7 +38,7 @@ func (c *LLMClient) generateGoogle(ctx context.Context, prompt string) (string, 
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := cfg.HTTPClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("call google API: %w", err)
 	}
@@ -73,19 +73,19 @@ func (c *LLMClient) generateGoogle(ctx context.Context, prompt string) (string, 
 	return answer, nil
 }
 
-func (c *LLMClient) googleRequestURL() string {
-	if strings.Contains(c.apiURL, ":generateContent") {
+func googleRequestURL(cfg Config) string {
+	if strings.Contains(cfg.APIURL, ":generateContent") {
 		sep := "?"
-		if strings.Contains(c.apiURL, "?") {
+		if strings.Contains(cfg.APIURL, "?") {
 			sep = "&"
 		}
-		return c.apiURL + sep + "key=" + c.apiKey
+		return cfg.APIURL + sep + "key=" + cfg.APIKey
 	}
 
 	return fmt.Sprintf(
 		"%s/models/%s:generateContent?key=%s",
-		strings.TrimSuffix(c.apiURL, "/"),
-		c.model,
-		c.apiKey,
+		strings.TrimSuffix(cfg.APIURL, "/"),
+		cfg.Model,
+		cfg.APIKey,
 	)
 }
