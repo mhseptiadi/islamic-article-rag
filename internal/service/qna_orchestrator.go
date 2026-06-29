@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/mhseptiadi/islamic-article-rag/internal/service/external_api"
 	"github.com/mhseptiadi/islamic-article-rag/internal/model"
 	"github.com/mhseptiadi/islamic-article-rag/internal/repository/mongo"
 	"github.com/mhseptiadi/islamic-article-rag/internal/repository/qdrant"
@@ -22,7 +23,7 @@ type QnAOrchestrator struct {
 	embedder       *EmbeddingClient
 	llm            *LLMClient
 	topicDetector  *TopicDetectorClient
-	textValidator  *IslamicTextValidatorClient
+	textValidator  *external_api.IslamicTextValidatorClient
 	vectors        *qdrant.VectorRepository
 	articles       *mongo.ArticleRepository
 	qnaRecords     *mongo.QnARepository
@@ -36,7 +37,7 @@ func NewQnAOrchestrator(
 	embedder *EmbeddingClient,
 	llm *LLMClient,
 	topicDetector *TopicDetectorClient,
-	textValidator *IslamicTextValidatorClient,
+	textValidator *external_api.IslamicTextValidatorClient,
 	vectors *qdrant.VectorRepository,
 	articles *mongo.ArticleRepository,
 	qnaRecords *mongo.QnARepository,
@@ -64,7 +65,7 @@ type AskResult struct {
 	RecordID                      string                         `json:"record_id"`
 	Answer                        string                         `json:"answer"`
 	OffTopic                      bool                           `json:"off_topic,omitempty"`
-	IslamicTextValidationResponse *IslamicTextValidationResponse `json:"islamicTextValidationResponse"`
+	IslamicTextValidationResponse *external_api.IslamicTextValidationResponse `json:"islamicTextValidationResponse"`
 	FullArticles                  []model.Article                `json:"full_articles"`
 	Chunks                        []model.Chunk                  `json:"chunks"`
 }
@@ -264,10 +265,10 @@ func (o *QnAOrchestrator) prepareAskContext(ctx context.Context, question string
 	}, nil
 }
 
-func (o *QnAOrchestrator) validateAnswer(ctx context.Context, answer string) (string, *IslamicTextValidationResponse) {
+func (o *QnAOrchestrator) validateAnswer(ctx context.Context, answer string) (string, *external_api.IslamicTextValidationResponse) {
 	validation, err := o.textValidator.Validate(ctx, answer)
 	if err != nil {
-		return ReplaceIslamicTagsOnValidationError(answer), nil
+		return external_api.ReplaceIslamicTagsOnValidationError(answer), nil
 	}
 
 	validatedAnswer := validation.ReplacedText

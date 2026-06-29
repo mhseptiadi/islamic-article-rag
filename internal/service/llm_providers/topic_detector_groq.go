@@ -1,4 +1,4 @@
-package llmproviders
+package llm_providers
 
 import (
 	"bytes"

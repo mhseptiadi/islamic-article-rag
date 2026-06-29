@@ -37,14 +37,14 @@ func buildRAGPrompt(question string, contextBlocks []string) string {
 	return b.String()
 }
 
-func buildRAGMessages(question string, contextBlocks []string) []map[string]string {
-	messages := make([]map[string]string, 0, len(ragFewShotExamples())+2)
-	messages = append(messages, map[string]string{
+func buildRAGMessages(question string, contextBlocks []string) []map[string]interface{} {
+	messages := make([]map[string]interface{}, 0, len(ragFewShotExamples())+2)
+	messages = append(messages, map[string]interface{}{
 		"role":    "system",
 		"content": ragSystemPrompt(),
 	})
 	for _, msg := range ragFewShotExamples() {
-		messages = append(messages, map[string]string{
+		messages = append(messages, map[string]interface{}{
 			"role":    msg.Role,
 			"content": msg.Content,
 		})
@@ -62,7 +62,7 @@ func buildRAGMessages(question string, contextBlocks []string) []map[string]stri
 	userContent.WriteString("Question: ")
 	userContent.WriteString(question)
 
-	messages = append(messages, map[string]string{
+	messages = append(messages, map[string]interface{}{
 		"role":    "user",
 		"content": userContent.String(),
 	})
@@ -71,23 +71,23 @@ func buildRAGMessages(question string, contextBlocks []string) []map[string]stri
 }
 
 func ragSystemPrompt() string {
-	return `You are an Islamic AI assistant.
-	Rule 1: Answer in the same language as the question.
-	Rule 2: If Question is not related to Islamic topic, answer with "` + OffTopicAnswer + `"
-	Rule 3: Every time you quote the Quran, you must use this exact format: <quran chapter="number" verse="number">quote text</quran>.
-	Rule 4: Every time you quote a Hadith, you must use this exact format: <hadith collection="name" number="number">quote text</hadith>.
-	Rule 5: Do not write citations outside of these tags.
-	Rule 6: ADJUST THE FORMAT & LENGTH OF THE ANSWER ACCORDING TO THE QUESTION TYPE:
-	- If the question asks about "Rulings", "What", or "Why": Answer concisely in a dense response (around 100 - 200 words).
-	- If the question asks about "Procedures", "Guides", or "How": Explain completely but remain focused (maximum 400 words).
-	`
 	// return `You are an Islamic AI assistant.
 	// Rule 1: Answer in the same language as the question.
-	// Rule 2: OUT-OF-DOMAIN & GROUNDING GUARDRAIL: If the question is not related to Islamic topics, OR if the information cannot be found in the provided articles, do not attempt to guess. You MUST answer exactly with: "` + OffTopicAnswer + `"
-	// Rule 3: SCRIPTURE VALIDATION (CRITICAL): If your intended answer includes a quote, verse, or reference from the Quran or a Hadith based on the articles, you MUST NOT generate the text directly. You MUST call the 'validate_islamic_text' tool to retrieve the verified Arabic text and translation first.
-	// Rule 4: ADJUST FORMAT & LENGTH:
-	// - Rulings/What/Why: Concise paragraph (100 - 200 words).
-	// - Procedures/Guides/How: Step-by-step list (max 400 words).`
+	// Rule 2: If Question is not related to Islamic topic, answer with "` + OffTopicAnswer + `"
+	// Rule 3: Every time you quote the Quran, you must use this exact format: <quran chapter="number" verse="number">quote text</quran>.
+	// Rule 4: Every time you quote a Hadith, you must use this exact format: <hadith collection="name" number="number">quote text</hadith>.
+	// Rule 5: Do not write citations outside of these tags.
+	// Rule 6: ADJUST THE FORMAT & LENGTH OF THE ANSWER ACCORDING TO THE QUESTION TYPE:
+	// - If the question asks about "Rulings", "What", or "Why": Answer concisely in a dense response (around 100 - 200 words).
+	// - If the question asks about "Procedures", "Guides", or "How": Explain completely but remain focused (maximum 400 words).
+	// `
+	return `You are an Islamic AI assistant.
+	Rule 1: Answer in the same language as the question.
+	Rule 2: OUT-OF-DOMAIN & GROUNDING GUARDRAIL: If the question is not related to Islamic topics, OR if the information cannot be found in the provided articles, do not attempt to guess. You MUST answer exactly with: "` + OffTopicAnswer + `"
+	Rule 3: SCRIPTURE VALIDATION (CRITICAL): If your intended answer includes a quote, verse, or reference from the Quran or a Hadith based on the articles, you MUST NOT generate the text directly. You MUST call the 'validate_islamic_text' tool to retrieve the verified Arabic text and translation first.
+	Rule 4: ADJUST FORMAT & LENGTH:
+	- Rulings/What/Why: Concise paragraph (100 - 200 words).
+	- Procedures/Guides/How: Step-by-step list (max 400 words).`
 }
 
 func ragFewShotExamples() []Message {

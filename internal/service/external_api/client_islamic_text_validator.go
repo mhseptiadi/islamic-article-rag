@@ -1,4 +1,4 @@
-package service
+package external_api
 
 import (
 	"bytes"

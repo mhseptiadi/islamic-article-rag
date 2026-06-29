@@ -2,10 +2,13 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 
-	llmproviders "github.com/mhseptiadi/islamic-article-rag/internal/service/llm_providers"
+	"github.com/mhseptiadi/islamic-article-rag/internal/model"
+	"github.com/mhseptiadi/islamic-article-rag/internal/service/external_api"
+	llm_providers "github.com/mhseptiadi/islamic-article-rag/internal/service/llm_providers"
 )
 
 type Message struct {
@@ -15,7 +18,7 @@ type Message struct {
 
 // StreamChunkFn is called for each LLM text chunk when streaming is available.
 // Return a non-nil error to abort generation.
-type StreamChunkFn = llmproviders.StreamChunkFn
+type StreamChunkFn = llm_providers.StreamChunkFn
 
 type LLMClient struct {
 	provider   string
@@ -29,9 +32,11 @@ type LLMClient struct {
 	topP                float64
 	stream              bool
 	reasoningEffort     string
+
+	referencesClient *external_api.ReferencesClient
 }
 
-func NewLLMClient(provider, apiKey, apiURL, model string, temperature float64, maxCompletionTokens int, topP float64, stream bool, reasoningEffort string) *LLMClient {
+func NewLLMClient(provider, apiKey, apiURL, model string, temperature float64, maxCompletionTokens int, topP float64, stream bool, reasoningEffort string, referencesClient *external_api.ReferencesClient) *LLMClient {
 	return &LLMClient{
 		provider:            provider,
 		apiKey:              apiKey,
@@ -43,6 +48,7 @@ func NewLLMClient(provider, apiKey, apiURL, model string, temperature float64, m
 		topP:                topP,
 		stream:              stream,
 		reasoningEffort:     reasoningEffort,
+		referencesClient:    referencesClient,
 	}
 }
 
@@ -50,8 +56,8 @@ func (c *LLMClient) GenerateAnswer(ctx context.Context, question string, context
 	return c.GenerateAnswerStream(ctx, question, contextBlocks, nil)
 }
 
-func (c *LLMClient) providerConfig() llmproviders.Config {
-	return llmproviders.Config{
+func (c *LLMClient) providerConfig() llm_providers.Config {
+	return llm_providers.Config{
 		APIKey:              c.apiKey,
 		APIURL:              c.apiURL,
 		Model:               c.model,
@@ -69,28 +75,80 @@ func (c *LLMClient) GenerateAnswerStream(ctx context.Context, question string, c
 	cfg := c.providerConfig()
 	switch c.provider {
 	case "google":
-		answer, err := llmproviders.GenerateGoogle(ctx, cfg, buildRAGPrompt(question, contextBlocks))
-		if err != nil {
-			return "", err
-		}
-		if onChunk != nil {
-			if err := onChunk(answer); err != nil {
-				return "", err
-			}
-		}
-		return answer, nil
+		return llm_providers.GenerateGoogle(ctx, cfg, buildRAGPrompt(question, contextBlocks), onChunk)
 	case "groq":
-		return llmproviders.GenerateGroqStream(ctx, cfg, buildRAGMessages(question, contextBlocks), onChunk)
+		return llm_providers.GenerateGroqStream(ctx, cfg, buildRAGMessages(question, contextBlocks), onChunk)
 	default:
-		answer, err := llmproviders.GenerateOllama(ctx, cfg, buildRAGPrompt(question, contextBlocks))
-		if err != nil {
-			return "", err
-		}
-		if onChunk != nil {
-			if err := onChunk(answer); err != nil {
+		return llm_providers.GenerateOllama(ctx, cfg, buildRAGPrompt(question, contextBlocks), onChunk)
+	}
+}
+
+// GenerateAgenticStream is your new entry point from the HTTP Handler
+func (c *LLMClient) GenerateAgenticStream(ctx context.Context, question string, contextBlocks []string, onChunk StreamChunkFn) (string, error) {
+	messages := buildRAGMessages(question, contextBlocks)
+	cfg := c.providerConfig()
+
+	// PHASE 1: The Hidden Agent Check (Disable streaming for clean JSON parsing)
+	cfg.Stream = false
+
+	// Execute the hidden Groq call (You will need to update readGroqJSON to return the full GroqResponse struct)
+	rawResp, err := llm_providers.ExecuteGroqRequest(ctx, cfg, messages)
+	if err != nil {
+		return "", err
+	}
+
+	fmt.Println("rawResp: ", rawResp)
+
+	// Check if the LLM decided to call your batch validator
+	if len(rawResp.Choices[0].Message.ToolCalls) > 0 {
+		toolCall := rawResp.Choices[0].Message.ToolCalls[0]
+
+		if toolCall.Function.Name == "validate_islamic_text" {
+			fmt.Println("🤖 Agent requested scripture validation...")
+
+			// 1. Parse the batch array requested by the LLM
+			var args model.ToolArguments
+			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
+				return "", fmt.Errorf("parse validate_islamic_text arguments: %w", err)
+			}
+
+			// 2. HTTP POST to the references microservice
+			if c.referencesClient == nil {
+				return "", fmt.Errorf("references client is not configured")
+			}
+			refsResp, err := c.referencesClient.Lookup(ctx, args.References)
+			if err != nil {
 				return "", err
 			}
+			verifiedText := refsResp.ToolContent()
+
+			// 3. Append the LLM's tool call request to history
+			messages = append(messages, map[string]interface{}{
+				"role":       "assistant",
+				"content":    "",
+				"tool_calls": []model.ToolCall{toolCall},
+			})
+
+			// 4. Append the Validator's response to history
+			messages = append(messages, map[string]interface{}{
+				"role":         "tool",
+				"tool_call_id": toolCall.ID,
+				"name":         toolCall.Function.Name,
+				"content":      verifiedText,
+			})
 		}
-		return answer, nil
+	} else {
+		// If no tools were called, append the standard text response
+		messages = append(messages, map[string]interface{}{
+			"role":    "assistant",
+			"content": rawResp.Choices[0].Message.Content,
+		})
 	}
+
+	fmt.Println("messages: ", messages)
+
+	// PHASE 2: The Visible Stream
+	// Turn streaming back on and call Groq a second time to stream the final verified answer to the SPA
+	cfg.Stream = true
+	return llm_providers.GenerateGroqStream(ctx, cfg, messages, onChunk)
 }

@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/mhseptiadi/islamic-article-rag/internal/config"
+	"github.com/mhseptiadi/islamic-article-rag/internal/service/external_api"
 	"github.com/mhseptiadi/islamic-article-rag/internal/handler"
 	"github.com/mhseptiadi/islamic-article-rag/internal/repository/mongo"
 	"github.com/mhseptiadi/islamic-article-rag/internal/repository/qdrant"
@@ -25,9 +26,10 @@ func main() {
 	}
 
 	embedder := service.NewEmbeddingClient(cfg.EmbeddingProvider, cfg.EmbeddingAPIKey, cfg.EmbeddingURL, cfg.EmbeddingModel)
-	llm := service.NewLLMClient(cfg.LLMProvider, cfg.LLMAPIKey, cfg.LLMApiURL, cfg.LLMModel, cfg.LLMTemperature, cfg.LLMMaxCompletionTokens, cfg.LLMTopP, cfg.LLMStream, cfg.LLMReasoningEffort)
+	referencesClient := external_api.NewReferencesClient(cfg.ReferencesAPIURL)
+	llm := service.NewLLMClient(cfg.LLMProvider, cfg.LLMAPIKey, cfg.LLMApiURL, cfg.LLMModel, cfg.LLMTemperature, cfg.LLMMaxCompletionTokens, cfg.LLMTopP, cfg.LLMStream, cfg.LLMReasoningEffort, referencesClient)
 	topicDetector := service.NewTopicDetectorClient(cfg.LLMTopicDetectorAPIKey, cfg.LLMTopicDetectorAPIURL, cfg.LLMTopicDetectorModel)
-	textValidator := service.NewIslamicTextValidatorClient(cfg.IslamicTextValidatorURL)
+	textValidator := external_api.NewIslamicTextValidatorClient(cfg.IslamicTextValidatorURL)
 
 	vectors, err := qdrant.NewVectorRepository(cfg.QdrantHost, cfg.QdrantAPIKey, cfg.QdrantGRPCPort, cfg.QdrantCollection, cfg.MinSimilarityScore)
 	if err != nil {

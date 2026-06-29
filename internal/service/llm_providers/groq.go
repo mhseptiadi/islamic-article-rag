@@ -1,4 +1,4 @@
-package llmproviders
+package llm_providers
 
 import (
 	"bufio"
@@ -9,9 +9,76 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/mhseptiadi/islamic-article-rag/internal/model"
 )
 
-func GenerateGroqStream(ctx context.Context, cfg Config, messages []map[string]string, onChunk StreamChunkFn) (string, error) {
+type GroqResponse struct {
+	Choices []struct {
+		Message struct {
+			Content   string           `json:"content"`
+			ToolCalls []model.ToolCall `json:"tool_calls,omitempty"`
+		} `json:"message"`
+	} `json:"choices"`
+}
+
+// executeGroqRequest performs a non-streaming HTTP call to Groq and returns the full parsed response.
+// This is used for Phase 1 (Agent Decision) of the workflow.
+func ExecuteGroqRequest(ctx context.Context, cfg Config, messages []map[string]interface{}) (*GroqResponse, error) {
+	// 1. Build the base payload with streaming strictly disabled
+	payload := map[string]any{
+		"messages":              messages,
+		"model":                 cfg.Model,
+		"temperature":           cfg.Temperature,
+		"max_completion_tokens": cfg.MaxCompletionTokens,
+		"top_p":                 cfg.TopP,
+		"stream":                false,
+	}
+
+	// 2. Inject the Tool Schema
+	payload["tools"] = []model.ToolSchema{model.GetValidateIslamicTextSchema()}
+	payload["tool_choice"] = "auto"
+
+	// 3. Marshal to JSON
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal groq request: %w", err)
+	}
+
+	// 4. Create and execute the HTTP Request
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, groqRequestURL(cfg), bytes.NewReader(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("create groq request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
+
+	resp, err := cfg.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("call groq API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 5. Handle HTTP Errors
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf("groq API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	// 6. Decode the successful response into our struct
+	var result GroqResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode groq response: %w", err)
+	}
+
+	if len(result.Choices) == 0 {
+		return nil, fmt.Errorf("groq API returned empty choices")
+	}
+
+	return &result, nil
+}
+
+func GenerateGroqStream(ctx context.Context, cfg Config, messages []map[string]interface{}, onChunk StreamChunkFn) (string, error) {
 	if cfg.APIKey == "" {
 		return "", fmt.Errorf("groq LLM requires LLM_API_KEY")
 	}
@@ -25,6 +92,12 @@ func GenerateGroqStream(ctx context.Context, cfg Config, messages []map[string]s
 		"stream":                cfg.Stream,
 		"reasoning_effort":      cfg.ReasoningEffort,
 	}
+
+	// if len(tools) > 0 {
+	// 	payload["tools"] = tools
+	// 	payload["tool_choice"] = "auto"
+	// }
+
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("marshal groq request: %w", err)

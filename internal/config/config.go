@@ -56,6 +56,7 @@ type Config struct {
 	MaxQuestionChars int
 
 	IslamicTextValidatorURL string
+	ReferencesAPIURL        string
 }
 
 func Load() (*Config, error) {
@@ -108,6 +109,7 @@ func Load() (*Config, error) {
 		// MaxRequestPerDay:        getEnvInt("MAX_REQUESTS_PER_DAY", 1000, fileEnv),
 		MaxQuestionChars:        getEnvInt("MAX_QUESTION_CHARS", 300, fileEnv),
 		IslamicTextValidatorURL: getEnv("ISLAMIC_TEXT_VALIDATOR_URL", "localhost:8080/replace-tagged", fileEnv),
+		ReferencesAPIURL:        getEnv("REFERENCES_API_URL", "localhost:8080/references", fileEnv),
 	}, nil
 }
 

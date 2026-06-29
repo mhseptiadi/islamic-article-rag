@@ -1,4 +1,4 @@
-package llmproviders
+package llm_providers
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-func GenerateGoogle(ctx context.Context, cfg Config, prompt string) (string, error) {
+func GenerateGoogle(ctx context.Context, cfg Config, prompt string, onChunk StreamChunkFn) (string, error) {
 	if cfg.APIKey == "" {
 		return "", fmt.Errorf("google LLM requires LLM_API_KEY")
 	}
@@ -68,6 +68,11 @@ func GenerateGoogle(ctx context.Context, cfg Config, prompt string) (string, err
 	answer := strings.TrimSpace(result.Candidates[0].Content.Parts[0].Text)
 	if answer == "" {
 		return "", fmt.Errorf("google API returned empty response")
+	}
+	if onChunk != nil {
+		if err := onChunk(answer); err != nil {
+			return "", err
+		}
 	}
 
 	return answer, nil

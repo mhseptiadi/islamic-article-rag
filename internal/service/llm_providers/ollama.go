@@ -1,4 +1,4 @@
-package llmproviders
+package llm_providers
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-func GenerateOllama(ctx context.Context, cfg Config, prompt string) (string, error) {
+func GenerateOllama(ctx context.Context, cfg Config, prompt string, onChunk StreamChunkFn) (string, error) {
 	payload := map[string]any{
 		"model":  cfg.Model,
 		"prompt": prompt,
@@ -44,9 +44,15 @@ func GenerateOllama(ctx context.Context, cfg Config, prompt string) (string, err
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", fmt.Errorf("decode ollama response: %w", err)
 	}
-	if strings.TrimSpace(result.Response) == "" {
+	answer := strings.TrimSpace(result.Response)
+	if answer == "" {
 		return "", fmt.Errorf("ollama API returned empty response")
 	}
+	if onChunk != nil {
+		if err := onChunk(answer); err != nil {
+			return "", err
+		}
+	}
 
-	return strings.TrimSpace(result.Response), nil
+	return answer, nil
 }
