@@ -13,7 +13,9 @@ import (
 	"github.com/mhseptiadi/islamic-article-rag/internal/model"
 )
 
-type GroqResponse struct {
+type groqProvider struct{}
+
+type groqResponse struct {
 	Choices []struct {
 		Message struct {
 			Content   string           `json:"content"`
@@ -22,9 +24,21 @@ type GroqResponse struct {
 	} `json:"choices"`
 }
 
+func (groqProvider) ExecuteAgentRequest(ctx context.Context, cfg Config, messages []map[string]interface{}) (*AgentResponse, error) {
+	raw, err := executeGroqRequest(ctx, cfg, messages)
+	if err != nil {
+		return nil, err
+	}
+	msg := raw.Choices[0].Message
+	return &AgentResponse{
+		Content:   msg.Content,
+		ToolCalls: msg.ToolCalls,
+	}, nil
+}
+
 // executeGroqRequest performs a non-streaming HTTP call to Groq and returns the full parsed response.
 // This is used for Phase 1 (Agent Decision) of the workflow.
-func ExecuteGroqRequest(ctx context.Context, cfg Config, messages []map[string]interface{}) (*GroqResponse, error) {
+func executeGroqRequest(ctx context.Context, cfg Config, messages []map[string]interface{}) (*groqResponse, error) {
 	// 1. Build the base payload with streaming strictly disabled
 	payload := map[string]any{
 		"messages":              messages,
@@ -66,7 +80,7 @@ func ExecuteGroqRequest(ctx context.Context, cfg Config, messages []map[string]i
 	}
 
 	// 6. Decode the successful response into our struct
-	var result GroqResponse
+	var result groqResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode groq response: %w", err)
 	}
@@ -78,9 +92,9 @@ func ExecuteGroqRequest(ctx context.Context, cfg Config, messages []map[string]i
 	return &result, nil
 }
 
-func GenerateGroqStream(ctx context.Context, cfg Config, messages []map[string]interface{}, onChunk StreamChunkFn) (string, error) {
-	if cfg.APIKey == "" {
-		return "", fmt.Errorf("groq LLM requires LLM_API_KEY")
+func (groqProvider) GenerateStream(ctx context.Context, cfg Config, messages []map[string]interface{}, onChunk StreamChunkFn) (string, error) {
+	if err := requireAPIKey(cfg, "groq"); err != nil {
+		return "", err
 	}
 
 	payload := map[string]any{

@@ -71,28 +71,27 @@ func (c *LLMClient) providerConfig() llm_providers.Config {
 }
 
 func (c *LLMClient) GenerateAnswerStream(ctx context.Context, question string, contextBlocks []string, onChunk StreamChunkFn) (string, error) {
-	fmt.Println("c.provider: ", c.provider)
 	cfg := c.providerConfig()
-	switch c.provider {
-	case "google":
-		return llm_providers.GenerateGoogle(ctx, cfg, buildRAGPrompt(question, contextBlocks), onChunk)
-	case "groq":
-		return llm_providers.GenerateGroqStream(ctx, cfg, buildRAGMessages(question, contextBlocks, false), onChunk)
-	default:
-		return llm_providers.GenerateOllama(ctx, cfg, buildRAGPrompt(question, contextBlocks), onChunk)
-	}
+	provider := llm_providers.GetProvider(c.provider)
+	messages := buildRAGMessages(question, contextBlocks, false)
+	return provider.GenerateStream(ctx, cfg, messages, onChunk)
 }
 
 // GenerateAgenticStream is your new entry point from the HTTP Handler
 func (c *LLMClient) GenerateAgenticStream(ctx context.Context, question string, contextBlocks []string, onChunk StreamChunkFn) (string, error) {
 	messages := buildRAGMessages(question, contextBlocks, true)
 	cfg := c.providerConfig()
+	provider := llm_providers.GetProvider(c.provider)
+
+	agent, ok := provider.(llm_providers.AgentCapable)
+	if !ok {
+		return "", fmt.Errorf("provider %q does not support agentic generation", c.provider)
+	}
 
 	// PHASE 1: The Hidden Agent Check (Disable streaming for clean JSON parsing)
 	cfg.Stream = false
 
-	// Execute the hidden Groq call (You will need to update readGroqJSON to return the full GroqResponse struct)
-	rawResp, err := llm_providers.ExecuteGroqRequest(ctx, cfg, messages)
+	rawResp, err := agent.ExecuteAgentRequest(ctx, cfg, messages)
 	if err != nil {
 		return "", err
 	}
@@ -103,8 +102,8 @@ func (c *LLMClient) GenerateAgenticStream(ctx context.Context, question string, 
 	messages = buildRAGMessages(question, contextBlocks, false)
 
 	// Check if the LLM decided to call your batch validator
-	if len(rawResp.Choices[0].Message.ToolCalls) > 0 {
-		toolCall := rawResp.Choices[0].Message.ToolCalls[0]
+	if len(rawResp.ToolCalls) > 0 {
+		toolCall := rawResp.ToolCalls[0]
 
 		if toolCall.Function.Name == "validate_islamic_text" {
 			fmt.Println("🤖 Agent requested scripture validation...")
@@ -147,7 +146,7 @@ func (c *LLMClient) GenerateAgenticStream(ctx context.Context, question string, 
 		// If no tools were called, append the standard text response
 		messages = append(messages, map[string]interface{}{
 			"role":    "assistant",
-			"content": rawResp.Choices[0].Message.Content,
+			"content": rawResp.Content,
 		})
 	}
 
@@ -161,7 +160,7 @@ func (c *LLMClient) GenerateAgenticStream(ctx context.Context, question string, 
 	fmt.Println("--------------------------------")
 
 	// PHASE 2: The Visible Stream
-	// Turn streaming back on and call Groq a second time to stream the final verified answer to the SPA
+	// Turn streaming back on and call the provider a second time to stream the final verified answer to the SPA
 	cfg.Stream = true
-	return llm_providers.GenerateGroqStream(ctx, cfg, messages, onChunk)
+	return provider.GenerateStream(ctx, cfg, messages, onChunk)
 }

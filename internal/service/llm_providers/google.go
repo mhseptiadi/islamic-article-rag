@@ -10,10 +10,14 @@ import (
 	"strings"
 )
 
-func GenerateGoogle(ctx context.Context, cfg Config, prompt string, onChunk StreamChunkFn) (string, error) {
-	if cfg.APIKey == "" {
-		return "", fmt.Errorf("google LLM requires LLM_API_KEY")
+type googleProvider struct{}
+
+func (googleProvider) GenerateStream(ctx context.Context, cfg Config, messages []map[string]interface{}, onChunk StreamChunkFn) (string, error) {
+	if err := requireAPIKey(cfg, "google"); err != nil {
+		return "", err
 	}
+
+	prompt := messagesToPrompt(messages)
 
 	payload := map[string]any{
 		"contents": []map[string]any{

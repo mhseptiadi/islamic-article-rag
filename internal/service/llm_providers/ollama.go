@@ -10,7 +10,11 @@ import (
 	"strings"
 )
 
-func GenerateOllama(ctx context.Context, cfg Config, prompt string, onChunk StreamChunkFn) (string, error) {
+type ollamaProvider struct{}
+
+func (ollamaProvider) GenerateStream(ctx context.Context, cfg Config, messages []map[string]interface{}, onChunk StreamChunkFn) (string, error) {
+	prompt := messagesToPrompt(messages)
+
 	payload := map[string]any{
 		"model":  cfg.Model,
 		"prompt": prompt,
