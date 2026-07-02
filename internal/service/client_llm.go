@@ -96,7 +96,10 @@ func (c *LLMClient) GenerateAgenticStream(ctx context.Context, question string, 
 		return "", err
 	}
 
+	// fmt.Println("messages: ", messages)
+	// fmt.Println("--------------------------------")
 	fmt.Println("rawResp: ", rawResp)
+	fmt.Println("--------------------------------")
 
 	// build new messages after tools
 	messages = buildRAGMessages(question, contextBlocks, false)
@@ -150,7 +153,6 @@ func (c *LLMClient) GenerateAgenticStream(ctx context.Context, question string, 
 		})
 	}
 
-	fmt.Println("--------------------------------")
 	// to json string
 	jsonMessages, err := json.Marshal(messages)
 	if err != nil {
