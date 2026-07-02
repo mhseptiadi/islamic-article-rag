@@ -77,7 +77,7 @@ func (c *LLMClient) GenerateAnswerStream(ctx context.Context, question string, c
 	case "google":
 		return llm_providers.GenerateGoogle(ctx, cfg, buildRAGPrompt(question, contextBlocks), onChunk)
 	case "groq":
-		return llm_providers.GenerateGroqStream(ctx, cfg, buildRAGMessages(question, contextBlocks), onChunk)
+		return llm_providers.GenerateGroqStream(ctx, cfg, buildRAGMessages(question, contextBlocks, false), onChunk)
 	default:
 		return llm_providers.GenerateOllama(ctx, cfg, buildRAGPrompt(question, contextBlocks), onChunk)
 	}
@@ -85,7 +85,7 @@ func (c *LLMClient) GenerateAnswerStream(ctx context.Context, question string, c
 
 // GenerateAgenticStream is your new entry point from the HTTP Handler
 func (c *LLMClient) GenerateAgenticStream(ctx context.Context, question string, contextBlocks []string, onChunk StreamChunkFn) (string, error) {
-	messages := buildRAGMessages(question, contextBlocks)
+	messages := buildRAGMessages(question, contextBlocks, true)
 	cfg := c.providerConfig()
 
 	// PHASE 1: The Hidden Agent Check (Disable streaming for clean JSON parsing)
@@ -98,6 +98,9 @@ func (c *LLMClient) GenerateAgenticStream(ctx context.Context, question string, 
 	}
 
 	fmt.Println("rawResp: ", rawResp)
+
+	// build new messages after tools
+	messages = buildRAGMessages(question, contextBlocks, false)
 
 	// Check if the LLM decided to call your batch validator
 	if len(rawResp.Choices[0].Message.ToolCalls) > 0 {
@@ -122,6 +125,8 @@ func (c *LLMClient) GenerateAgenticStream(ctx context.Context, question string, 
 			}
 			verifiedText := refsResp.ToolContent()
 
+			fmt.Println("verifiedText: ", verifiedText)
+
 			// 3. Append the LLM's tool call request to history
 			messages = append(messages, map[string]interface{}{
 				"role":       "assistant",
@@ -135,6 +140,7 @@ func (c *LLMClient) GenerateAgenticStream(ctx context.Context, question string, 
 				"tool_call_id": toolCall.ID,
 				"name":         toolCall.Function.Name,
 				"content":      verifiedText,
+				// "content": refsResp,
 			})
 		}
 	} else {
@@ -145,7 +151,14 @@ func (c *LLMClient) GenerateAgenticStream(ctx context.Context, question string, 
 		})
 	}
 
-	fmt.Println("messages: ", messages)
+	fmt.Println("--------------------------------")
+	// to json string
+	jsonMessages, err := json.Marshal(messages)
+	if err != nil {
+		return "", fmt.Errorf("marshal messages: %w", err)
+	}
+	fmt.Println("messages: ", string(jsonMessages))
+	fmt.Println("--------------------------------")
 
 	// PHASE 2: The Visible Stream
 	// Turn streaming back on and call Groq a second time to stream the final verified answer to the SPA

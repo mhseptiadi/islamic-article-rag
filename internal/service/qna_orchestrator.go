@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/mhseptiadi/islamic-article-rag/internal/service/external_api"
 	"github.com/mhseptiadi/islamic-article-rag/internal/model"
 	"github.com/mhseptiadi/islamic-article-rag/internal/repository/mongo"
 	"github.com/mhseptiadi/islamic-article-rag/internal/repository/qdrant"
+	"github.com/mhseptiadi/islamic-article-rag/internal/service/external_api"
 )
 
 const (
@@ -62,12 +62,12 @@ func NewQnAOrchestrator(
 }
 
 type AskResult struct {
-	RecordID                      string                         `json:"record_id"`
-	Answer                        string                         `json:"answer"`
-	OffTopic                      bool                           `json:"off_topic,omitempty"`
+	RecordID                      string                                      `json:"record_id"`
+	Answer                        string                                      `json:"answer"`
+	OffTopic                      bool                                        `json:"off_topic,omitempty"`
 	IslamicTextValidationResponse *external_api.IslamicTextValidationResponse `json:"islamicTextValidationResponse"`
-	FullArticles                  []model.Article                `json:"full_articles"`
-	Chunks                        []model.Chunk                  `json:"chunks"`
+	FullArticles                  []model.Article                             `json:"full_articles"`
+	Chunks                        []model.Chunk                               `json:"chunks"`
 }
 
 var ErrInvalidFeedbackType = errors.New("invalid feedback_type")
@@ -161,7 +161,13 @@ func (o *QnAOrchestrator) AskStream(
 		return err
 	}
 
-	answer, err := o.llm.GenerateAnswerStream(ctx, question, actx.contextBlocks, func(chunk string) error {
+	// answer, err := o.llm.GenerateAnswerStream(ctx, question, actx.contextBlocks, func(chunk string) error {
+	// 	return emit("token", map[string]string{"text": chunk})
+	// })
+	// if err != nil {
+	// 	return err
+	// }
+	answer, err := o.llm.GenerateAgenticStream(ctx, question, actx.contextBlocks, func(chunk string) error {
 		return emit("token", map[string]string{"text": chunk})
 	})
 	if err != nil {

@@ -8,7 +8,7 @@ import (
 func buildRAGPrompt(question string, contextBlocks []string) string {
 	var b strings.Builder
 
-	b.WriteString(ragSystemPrompt())
+	b.WriteString(ragSystemPrompt(false))
 	b.WriteString("\n\nExamples:\n\n")
 	for _, msg := range ragFewShotExamples() {
 		switch msg.Role {
@@ -37,11 +37,11 @@ func buildRAGPrompt(question string, contextBlocks []string) string {
 	return b.String()
 }
 
-func buildRAGMessages(question string, contextBlocks []string) []map[string]interface{} {
+func buildRAGMessages(question string, contextBlocks []string, needTools bool) []map[string]interface{} {
 	messages := make([]map[string]interface{}, 0, len(ragFewShotExamples())+2)
 	messages = append(messages, map[string]interface{}{
 		"role":    "system",
-		"content": ragSystemPrompt(),
+		"content": ragSystemPrompt(needTools),
 	})
 	for _, msg := range ragFewShotExamples() {
 		messages = append(messages, map[string]interface{}{
@@ -70,31 +70,43 @@ func buildRAGMessages(question string, contextBlocks []string) []map[string]inte
 	return messages
 }
 
-func ragSystemPrompt() string {
-	// return `You are an Islamic AI assistant.
-	// Rule 1: Answer in the same language as the question.
-	// Rule 2: If Question is not related to Islamic topic, answer with "` + OffTopicAnswer + `"
-	// Rule 3: Every time you quote the Quran, you must use this exact format: <quran chapter="number" verse="number">quote text</quran>.
-	// Rule 4: Every time you quote a Hadith, you must use this exact format: <hadith collection="name" number="number">quote text</hadith>.
-	// Rule 5: Do not write citations outside of these tags.
-	// Rule 6: ADJUST THE FORMAT & LENGTH OF THE ANSWER ACCORDING TO THE QUESTION TYPE:
-	// - If the question asks about "Rulings", "What", or "Why": Answer concisely in a dense response (around 100 - 200 words).
-	// - If the question asks about "Procedures", "Guides", or "How": Explain completely but remain focused (maximum 400 words).
-	// `
+func ragSystemPromptOld() string {
 	return `You are an Islamic AI assistant.
 	Rule 1: Answer in the same language as the question.
-	Rule 2: OUT-OF-DOMAIN & GROUNDING GUARDRAIL: If the question is not related to Islamic topics, OR if the information cannot be found in the provided articles, do not attempt to guess. You MUST answer exactly with: "` + OffTopicAnswer + `"
-	Rule 3: SCRIPTURE VALIDATION (CRITICAL): If your intended answer includes a quote, verse, or reference from the Quran or a Hadith based on the articles, you MUST NOT generate the text directly. You MUST call the 'validate_islamic_text' tool to retrieve the verified Arabic text and translation first.
-	Rule 4: ADJUST FORMAT & LENGTH:
-	- Rulings/What/Why: Concise paragraph (100 - 200 words).
-	- Procedures/Guides/How: Step-by-step list (max 400 words).`
+	Rule 2: If Question is not related to Islamic topic, answer with "` + OffTopicAnswer + `"
+	Rule 3: Every time you quote the Quran, you must use this exact format: <quran chapter="number" verse="number">quote text</quran>.
+	Rule 4: Every time you quote a Hadith, you must use this exact format: <hadith collection="name" number="number">quote text</hadith>.
+	Rule 5: Do not write citations outside of these tags.
+	Rule 6: ADJUST THE FORMAT & LENGTH OF THE ANSWER ACCORDING TO THE QUESTION TYPE:
+	- If the question asks about "Rulings", "What", or "Why": Answer concisely in a dense response (around 100 - 200 words).
+	- If the question asks about "Procedures", "Guides", or "How": Explain completely but remain focused (maximum 400 words).
+	`
+}
+
+func ragSystemPrompt(needTools bool) string {
+	if needTools {
+		return `You are an Islamic AI assistant.
+		Rule 1: Answer in the same language as the question.
+		Rule 2: OUT-OF-DOMAIN & GROUNDING GUARDRAIL: If the question is not related to Islamic topics, OR if the information cannot be found in the provided articles, do not attempt to guess. You MUST answer exactly with: "` + OffTopicAnswer + `"
+		Rule 3: SCRIPTURE VALIDATION: Before quoting a Quran verse or Hadith, you MUST call the 'validate_islamic_text' tool. Once you receive the "RESULTS FOR YOUR REQUESTED BATCH" in the chat history, you are permitted to output the verified text wrapped in <quran> or <hadith> tags.
+		Rule 4: ADJUST FORMAT & LENGTH:
+		- Rulings/What/Why: Concise paragraph (100 - 200 words).
+		- Procedures/Guides/How: Step-by-step list (max 400 words).`
+	} else {
+		return `You are an Islamic AI assistant.
+		Rule 1: Answer in the same language as the question.
+		Rule 2: OUT-OF-DOMAIN & GROUNDING GUARDRAIL: If the question is not related to Islamic topics, OR if the information cannot be found in the provided articles, do not attempt to guess. You MUST answer exactly with: "` + OffTopicAnswer + `"
+		Rule 3: ADJUST FORMAT & LENGTH:
+		- Rulings/What/Why: Concise paragraph (100 - 200 words).
+		- Procedures/Guides/How: Step-by-step list (max 400 words).`
+	}
 }
 
 func ragFewShotExamples() []Message {
 	return []Message{
-		{Role: "user", Content: "What does the Quran say about fasting?"},
-		{Role: "assistant", Content: "Fasting is prescribed for believers. Allah says: <quran chapter=\"2\" verse=\"183\">O you who have believed, decreed upon you is fasting as it was decreed upon those before you that you may become righteous.</quran>"},
-		{Role: "user", Content: "Give me a hadith about intention."},
-		{Role: "assistant", Content: "The Prophet emphasized intention deeply. He said: <hadith collection=\"bukhari\" number=\"1\">The reward of deeds depends upon the intentions.</hadith>"},
+		// {Role: "user", Content: "What does the Quran say about fasting?"},
+		// {Role: "assistant", Content: "Fasting is prescribed for believers. Allah says: <quran chapter=\"2\" verse=\"183\">O you who have believed, decreed upon you is fasting as it was decreed upon those before you that you may become righteous.</quran>"},
+		// {Role: "user", Content: "Give me a hadith about intention."},
+		// {Role: "assistant", Content: "The Prophet emphasized intention deeply. He said: <hadith collection=\"bukhari\" number=\"1\">The reward of deeds depends upon the intentions.</hadith>"},
 	}
 }
